@@ -155,6 +155,7 @@ const App: React.FC = () => {
     const { data: { subscription } } = auth.onAuthStateChange(async (event, session) => {
       const user = session?.user;
       if (user && user.email) {
+        setIsAuthModalOpen(false); // Close modal on success
         try {
           // Fetch profile to get role
           const { data: profile, error: profileError } = await db
