@@ -12,7 +12,7 @@ Sol-Fa Sanctuary is a specialized platform for discovering, managing, and sharin
 - **Frontend Core**: React 19, TypeScript
 - **Styling**: Tailwind CSS (Lucide React for icons)
 - **Build Tool**: Vite 6
-- **Backend/Infrastructure**: ~~Firebase~~ → Supabase (migration in progress — see PROGRESS.md)
+- **Backend/Infrastructure**: ~~Firebase~~ → Supabase (migration completed — see PROGRESS.md)
 - **PWA**: Service Worker (`sw.js`), Manifest (`manifest.json`)
 - **Monitoring**: Sentry (`@sentry/react`)
 

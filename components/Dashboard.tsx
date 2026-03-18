@@ -110,7 +110,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onUploadClick, onPreview, darkMod
     try {
       const { error } = await db
         .from('sheets')
-        .update({ is_public: !sheet.is_public })
+        .update({ is_public: !sheet.isPublic })
         .eq('id', sheet.id);
       if (error) throw error;
     } catch (error) {
@@ -127,7 +127,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onUploadClick, onPreview, darkMod
           title: data.title,
           composer: data.composer,
           type: data.type,
-          is_public: data.is_public
+          is_public: data.isPublic
         })
         .eq('id', id);
       

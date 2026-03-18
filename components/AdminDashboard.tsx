@@ -110,7 +110,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onPreview, darkMode, sh
     try {
       const { error } = await db
         .from('sheets')
-        .update({ is_admin_restricted: !sheet.is_admin_restricted })
+        .update({ is_admin_restricted: !sheet.isAdminRestricted })
         .eq('id', sheet.id);
       
       if (error) throw error;
