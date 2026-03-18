@@ -21,45 +21,56 @@
 | `composer` | text | Composer name |
 | `type` | text | Sheet type/category |
 | `uploaded_at` | timestamptz | Auto set on insert |
-| `file_size` | int8 | In bytes |
+| `file_size` | text | Formatted size (e.g. "1.2 MB") |
 | `views` | int4 | Default 0 |
 | `downloads` | int4 | Default 0 |
 | `is_public` | bool | Default false |
 | `is_admin_restricted` | bool | Default false |
 | `thumbnail_url` | text | Public URL from Supabase Storage |
 | `pdf_url` | text | Public URL from Supabase Storage |
-| `uploaded_by` | uuid | FK → `users.id` |
+| `uploaded_by` | text | User email (matches Auth login) |
+| `user_id` | uuid | Matches Supabase Auth `user.id` |
 
-### `users`
+### `profiles`
 | Column | Type | Notes |
 |---|---|---|
 | `id` | uuid | Matches Supabase Auth `user.id` |
-| `display_name` | text | — |
-| `email` | text | — |
+| `display_name` | text | Full name or nickname |
+| `email` | text | Primary contact email |
 | `role` | text | `admin` or `user` |
-| `status` | text | `active`, `suspended`, etc. |
+| `status` | text | `Active`, `Inactive`, etc. |
 | `created_at` | timestamptz | Auto set on insert |
+
+### `interactions`
+| Column | Type | Notes |
+|---|---|---|
+| `id` | text | Primary key (unique string e.g. `user_id_sheet_id_type`) |
+| `user_id` | uuid | FK → `profiles.id` |
+| `sheet_id` | uuid | FK → `sheets.id` |
+| `type` | text | `views` or `downloads` |
+| `created_at` | timestamptz | Auto set on insert |
+
 
 ---
 
 ## Storage Buckets
 | Bucket | Contents | Access |
 |---|---|---|
-| `sheet-pdfs` | Uploaded PDF files | Private (signed URLs) |
-| `sheet-thumbnails` | Thumbnail images | Public |
+| `sheets` | Uploaded PDF files | Public (for discovery) |
+| `thumbnails` | Thumbnail images | Public |
 
 ---
 
 ## Auth
 - Providers: Email/Password, Google OAuth
 - Session: Managed by Supabase Auth (`supabase.auth`)
-- Role check: Via `users.role` column, not JWT claims
+- Role check: Via `profiles.role` column, not JWT claims
 
 ---
 
-## Row Level Security (RLS) — Planned
-- `sheets`: Public can read `is_public = true` rows. Auth users can insert. Admins can update/delete all.
-- `users`: Users can read/update own row. Admins can read all.
+## Row Level Security (RLS)
+- `sheets`: Public can read `is_public = true` rows. Authenticated users can insert. Admins can update/delete all.
+- `profiles`: Users can read/update own row. Admins can read all.
 
 ---
 
