@@ -64,10 +64,25 @@ Prior to this, successfully migrated the application from Firebase to Supabase. 
 - [x] Removed Redundant `importmap` and switched to standard bundling for better production compatibility.
 - [x] Verified build success and asset delivery to Vercel `dist/`.
 
+#### Phase 9: Critical Bug Fixes (Auth, Data, Cache)
+| Status | Category | Problem | Solution |
+|---|---|---|---|
+| [x] Fixed | Authentication | Modal closes immediately or stays on "Processing" | `onAuthStateChange` race conditions and state not resetting. Fixed by using `getSession` on mount and adding `useEffect` resets in `AuthModal`. |
+| [x] Fixed | Data | Music sheets not showing on home page | App-level race condition and Service Worker serving stale `index.html`. Fixed by SW v3 (Network-First) and session hydration fix. |
+| [x] Fixed | PWA / Cache | Changes not appearing in browser | Service Worker v1 was Cache-First and stuck. Fixed by bumping to v3 and changing to Network-First. |
+| [x] Fixed | PWA / Cache | SW TypeError on POST requests | Restricted fetch caching to `GET` requests to avoid errors with Supabase `POST` queries. |
+
+#### Phase 10: Runtime Bug Fixes (Auth, Data, SW v4)
+| Status | Category | Problem | Solution |
+|---|---|---|---|
+| [x] Fixed | Init | `supabase.ts` crashes when env vars are `undefined` | Added `|| ''` fallback to prevent `createClient(undefined, undefined)` from crashing the entire app. |
+| [x] Fixed | Auth | `saveUserProfile` never called after signup | Was dead code. Now invoked after signup with `displayName` field included in the upsert. |
+| [x] Fixed | Data | Deep-linked sheets have `undefined` fields | Deep-link fetch was not applying snake_case→camelCase mapping like `fetchSheets`. Added the same mapping. |
+| [x] Fixed | HTML | Duplicate `<title>` tag in `index.html` | Removed the duplicate. |
+| [x] Fixed | PWA / Cache | SW cached Supabase API error responses | Excluded `supabase.co` URLs from SW cache. Bumped to SW v5.1 (Neutral/Bypass). |
+
 ### Status
-- **Overall Status:** DEPLOYED & STABLE
-- **Last Updated:** 2026-03-18 — Final production fixes for Tailwind/PWA assets.
+- **Overall Status:** DEPLOYED & STABLE (5 runtime bugs fixed)
+- **Last Updated:** 2026-03-20 — Fixed auth, data display, and SW caching bugs.
 
 
-
-⚠️ CONTEXT.md UPDATE NEEDED: Stack changed from Firebase to Supabase. (COMPLETED)

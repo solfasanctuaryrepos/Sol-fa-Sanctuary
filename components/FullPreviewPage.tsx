@@ -120,7 +120,7 @@ const FullPreviewPage: React.FC<FullPreviewPageProps> = ({
         const pdfjsLib = (window as any).pdfjsLib;
         if (!pdfjsLib) throw new Error("PDF.js not loaded");
         
-        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+        pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdn.jsdelivr.net/npm/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.js`;
         const loadingTask = pdfjsLib.getDocument(sheet.pdfUrl);
         const pdf = await loadingTask.promise;
         setPdfDoc(pdf);
