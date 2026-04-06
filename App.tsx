@@ -144,17 +144,14 @@ const App: React.FC = () => {
     }
   };
 
-  // On mount: immediately read any existing session (fixes returning user race condition)
-  useEffect(() => {
-    auth.getSession().then(({ data: { session } }) => {
-      setUserFromSession(session?.user ?? null);
-    });
-  }, []);
-
-  // Live listener: only for sign-in / sign-out AFTER initial load
+  // Single auth listener — handles initial session + sign-in/sign-out.
+  // Using INITIAL_SESSION event avoids double getSession() calls in React Strict Mode
+  // which caused Web Lock contention warnings.
   useEffect(() => {
     const { data: { subscription } } = auth.onAuthStateChange(async (event, session) => {
-      if (event === 'SIGNED_IN') {
+      if (event === 'INITIAL_SESSION') {
+        await setUserFromSession(session?.user ?? null);
+      } else if (event === 'SIGNED_IN') {
         setIsAuthModalOpen(false);
         await setUserFromSession(session?.user ?? null);
       } else if (event === 'SIGNED_OUT') {
