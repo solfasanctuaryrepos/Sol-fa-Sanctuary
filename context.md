@@ -14,7 +14,6 @@ Sol-Fa Sanctuary is a specialized platform for discovering, managing, and sharin
 - **Build Tool**: Vite 6
 - **Backend/Infrastructure**: ~~Firebase~~ → Supabase (migration completed — see PROGRESS.md)
 - **PWA**: Service Worker (`sw.js`), Manifest (`manifest.json`)
-- **Monitoring**: Sentry (`@sentry/react`)
 
 ---
 

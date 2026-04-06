@@ -67,22 +67,26 @@ Prior to this, successfully migrated the application from Firebase to Supabase. 
 #### Phase 9: Critical Bug Fixes (Auth, Data, Cache)
 | Status | Category | Problem | Solution |
 |---|---|---|---|
-| [x] Fixed | Authentication | Modal closes immediately or stays on "Processing" | `onAuthStateChange` race conditions and state not resetting. Fixed by using `getSession` on mount and adding `useEffect` resets in `AuthModal`. |
-| [x] Fixed | Data | Music sheets not showing on home page | App-level race condition and Service Worker serving stale `index.html`. Fixed by SW v3 (Network-First) and session hydration fix. |
+| [x] Fixed | Authentication | Modal closes immediately or stays on "Processing" |  race conditions and state not resetting. Fixed by using  on mount and adding  resets in . |
+| [x] Fixed | Data | Music sheets not showing on home page | App-level race condition and Service Worker serving stale . Fixed by SW v3 (Network-First) and session hydration fix. |
 | [x] Fixed | PWA / Cache | Changes not appearing in browser | Service Worker v1 was Cache-First and stuck. Fixed by bumping to v3 and changing to Network-First. |
-| [x] Fixed | PWA / Cache | SW TypeError on POST requests | Restricted fetch caching to `GET` requests to avoid errors with Supabase `POST` queries. |
+| [x] Fixed | PWA / Cache | SW TypeError on POST requests | Restricted fetch caching to  requests to avoid errors with Supabase  queries. |
 
 #### Phase 10: Runtime Bug Fixes (Auth, Data, SW v4)
 | Status | Category | Problem | Solution |
 |---|---|---|---|
-| [x] Fixed | Init | `supabase.ts` crashes when env vars are `undefined` | Added `|| ''` fallback to prevent `createClient(undefined, undefined)` from crashing the entire app. |
-| [x] Fixed | Auth | `saveUserProfile` never called after signup | Was dead code. Now invoked after signup with `displayName` field included in the upsert. |
-| [x] Fixed | Data | Deep-linked sheets have `undefined` fields | Deep-link fetch was not applying snake_case→camelCase mapping like `fetchSheets`. Added the same mapping. |
-| [x] Fixed | HTML | Duplicate `<title>` tag in `index.html` | Removed the duplicate. |
-| [x] Fixed | PWA / Cache | SW cached Supabase API error responses | Excluded `supabase.co` URLs from SW cache. Bumped to SW v5.1 (Neutral/Bypass). |
+| [x] Fixed | Init |  crashes when env vars are  | Added  fallback to prevent  from crashing the entire app. |
+| [x] Fixed | Auth |  never called after signup | Was dead code. Now invoked after signup with  field included in the upsert. |
+| [x] Fixed | Data | Deep-linked sheets have  fields | Deep-link fetch was not applying snake_case to camelCase mapping like . Added the same mapping. |
+| [x] Fixed | HTML | Duplicate  tag in  | Removed the duplicate. |
+| [x] Fixed | PWA / Cache | SW cached Supabase API error responses | Excluded  URLs from SW cache. Bumped to SW v5.1 (Neutral/Bypass). |
+
+#### Phase 11: Sentry Removal and Admin Fixes (2026-04-11)
+- [x] Removed  from  — was installed but never initialized.
+- [x] Fixed Supabase RLS policies — added admin SELECT/UPDATE/DELETE on  and .
+- [x] Fixed admin UI not refreshing after actions —  extracted as , passed as  prop;  extracted and called directly after mutations.
+- [x] Fixed login lost on page refresh — SW was cache-first for , serving stale JS bundle hashes after deploys. Switched to network-first for navigation.
 
 ### Status
-- **Overall Status:** DEPLOYED & STABLE (5 runtime bugs fixed)
-- **Last Updated:** 2026-03-20 — Fixed auth, data display, and SW caching bugs.
-
-
+- **Overall Status:** DEPLOYED and STABLE
+- **Last Updated:** 2026-04-11 — Fixed admin RLS policies, UI refresh, and SW auth bug.
