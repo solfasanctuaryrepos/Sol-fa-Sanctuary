@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Download, Share2, Printer, Eye, Calendar, User, FileText, Music as MusicIcon, X, Moon, Sun, ExternalLink, Menu, ChevronUp, Loader2, AlertTriangle } from 'lucide-react';
 import { MusicSheet } from '../types';
 import { auth, db } from '../supabase';
@@ -12,14 +12,62 @@ interface FullPreviewPageProps {
   onAuthRequired: () => void;
 }
 
-const LazyPdfPage: React.FC<{ index: number; pdfDoc: any; forceRender: boolean; darkMode: boolean; sheetTitle: string }> = ({ index, pdfDoc, forceRender, darkMode, sheetTitle }) => {
+// ─── Module-level render queue ────────────────────────────────────────────────
+// Limits concurrent PDF page renders to 2, processed in FIFO (page order).
+// This guarantees page 1 always renders first and prevents CPU starvation
+// when multiple pages become visible at once.
+let _activeRenders = 0;
+const _MAX_CONCURRENT = 2;
+const _queue: Array<() => void> = [];
+
+const enqueueRender = (task: () => void) => {
+  _queue.push(task);
+  drainQueue();
+};
+
+const drainQueue = () => {
+  while (_activeRenders < _MAX_CONCURRENT && _queue.length > 0) {
+    _activeRenders++;
+    _queue.shift()!();
+  }
+};
+
+const releaseRender = () => {
+  _activeRenders = Math.max(0, _activeRenders - 1);
+  drainQueue();
+};
+// ─────────────────────────────────────────────────────────────────────────────
+
+interface LazyPdfPageProps {
+  index: number;
+  pdfDoc: any;
+  forceRender: boolean;
+  darkMode: boolean;
+  sheetTitle: string;
+  isFirstPage: boolean;
+}
+
+const LazyPdfPage: React.FC<LazyPdfPageProps> = ({
+  index,
+  pdfDoc,
+  forceRender,
+  darkMode,
+  sheetTitle,
+  isFirstPage,
+}) => {
+  const [isIntersecting, setIsIntersecting] = useState(isFirstPage);
   const [imgUrl, setImgUrl] = useState<string | null>(null);
-  const [isIntersecting, setIsIntersecting] = useState(false);
-  const [isRendering, setIsRendering] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
+  // Ref-based guard: prevents double-enqueue without triggering re-renders.
+  // Using state for this caused the critical bug: setIsRendering(true) inside
+  // doRender triggered the effect cleanup, which set cancelled=true and killed
+  // the render that had just started — resulting in an infinite spinner loop.
+  const hasQueued = useRef(false);
+
+  // IntersectionObserver — skipped for page 1 and print mode
   useEffect(() => {
-    if (forceRender) return;
+    if (isFirstPage || forceRender) return;
     const observer = new IntersectionObserver(
       ([entry]) => {
         if (entry.isIntersecting) {
@@ -27,80 +75,85 @@ const LazyPdfPage: React.FC<{ index: number; pdfDoc: any; forceRender: boolean; 
           observer.unobserve(entry.target);
         }
       },
-      { rootMargin: '400px' } // Pre-render pages before they hit the screen
+      { rootMargin: '200px' }
     );
     if (containerRef.current) observer.observe(containerRef.current);
     return () => observer.disconnect();
-  }, [forceRender]);
+  }, [isFirstPage, forceRender]);
 
+  // Enqueue render when page becomes visible or is forced (print).
+  // Dependency array is intentionally minimal — only values that should
+  // legitimately retrigger a render (new doc, scroll into view, print).
   useEffect(() => {
-    let active = true;
-    const renderPage = async () => {
-      if ((isIntersecting || forceRender) && pdfDoc && !imgUrl && !isRendering) {
-        setIsRendering(true);
-        try {
-          const page = await pdfDoc.getPage(index);
-          const viewport = page.getViewport({ scale: 1.8 }); // Balanced for quality and speed
-          const canvas = document.createElement('canvas');
-          const context = canvas.getContext('2d');
-          
-          if (context && active) {
-            canvas.height = viewport.height;
-            canvas.width = viewport.width;
-            await page.render({ canvasContext: context, viewport }).promise;
-            
-            canvas.toBlob((blob) => {
-              if (blob && active) {
-                const url = URL.createObjectURL(blob);
-                setImgUrl(url);
-              }
-            }, 'image/jpeg', 0.8);
-          }
-        } catch (err) {
-          console.error(`Page ${index} render error:`, err);
-        } finally {
-          if (active) setIsRendering(false);
-        }
+    if (!pdfDoc || (!isIntersecting && !forceRender)) return;
+    if (hasQueued.current) return; // Already queued — do not enqueue again
+    hasQueued.current = true;
+
+    let cancelled = false;
+
+    const doRender = async () => {
+      try {
+        const page = await pdfDoc.getPage(index);
+        const viewport = page.getViewport({ scale: 1.5 });
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        if (!ctx || cancelled) return;
+
+        canvas.width = viewport.width;
+        canvas.height = viewport.height;
+        await page.render({ canvasContext: ctx, viewport }).promise;
+        if (cancelled) return;
+
+        canvas.toBlob(
+          (blob) => {
+            if (blob && !cancelled) setImgUrl(URL.createObjectURL(blob));
+          },
+          'image/jpeg',
+          0.85
+        );
+      } catch (err) {
+        console.error(`Page ${index} render error:`, err);
+      } finally {
+        releaseRender();
       }
     };
 
-    renderPage();
-    return () => { 
-      active = false;
-    };
-  }, [isIntersecting, forceRender, pdfDoc, index]);
+    enqueueRender(doRender);
 
-  // Clean up Blob URLs to prevent memory leaks
-  useEffect(() => {
     return () => {
-      if (imgUrl) URL.revokeObjectURL(imgUrl);
+      cancelled = true;
+      // Reset so a remount (e.g. React Strict Mode) can re-enqueue cleanly
+      hasQueued.current = false;
     };
-  }, [imgUrl]);
+  }, [pdfDoc, isIntersecting, forceRender, index]);
+
+  // Revoke Blob URL on unmount to prevent memory leaks
+  useEffect(() => () => { if (imgUrl) URL.revokeObjectURL(imgUrl); }, [imgUrl]);
 
   const textSecondary = darkMode ? 'text-slate-500' : 'text-slate-400';
 
   return (
     <div ref={containerRef} className="score-page min-h-[500px] w-full flex items-center justify-center relative">
       {imgUrl ? (
-        <img 
-          src={imgUrl} 
-          alt={`${sheetTitle} - Page ${index}`} 
+        <img
+          src={imgUrl}
+          alt={`${sheetTitle} - Page ${index}`}
           className="w-full h-auto rounded shadow-lg border border-slate-700/10 transition-opacity duration-500 ease-in opacity-100"
         />
       ) : (
         <div className={`flex flex-col items-center gap-3 no-print ${textSecondary}`}>
           <Loader2 className="animate-spin opacity-20" size={32} />
-          <p className="text-xs font-serif italic">Preparing Page {index}...</p>
+          <p className="text-xs font-serif italic">Preparing Page {index}…</p>
         </div>
       )}
     </div>
   );
 };
 
-const FullPreviewPage: React.FC<FullPreviewPageProps> = ({ 
-  sheet, 
-  darkMode, 
-  onThemeToggle, 
+const FullPreviewPage: React.FC<FullPreviewPageProps> = ({
+  sheet,
+  darkMode,
+  onThemeToggle,
   onClose,
   isLoggedIn,
   onAuthRequired
@@ -114,26 +167,40 @@ const FullPreviewPage: React.FC<FullPreviewPageProps> = ({
   useEffect(() => {
     if (!sheet) return;
 
+    // Reset state for new sheet
+    setPdfDoc(null);
+    setNumPages(0);
+    setIsInitialLoading(true);
+
     const loadPdf = async () => {
-      setIsInitialLoading(true);
       try {
         const pdfjsLib = (window as any).pdfjsLib;
-        if (!pdfjsLib) throw new Error("PDF.js not loaded");
-        
-        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
-        const loadingTask = pdfjsLib.getDocument(sheet.pdfUrl);
+        if (!pdfjsLib) throw new Error('PDF.js not loaded');
+
+        pdfjsLib.GlobalWorkerOptions.workerSrc =
+          `https://cdn.jsdelivr.net/npm/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.js`;
+
+        // Passing an options object (not a plain URL string) enables HTTP 206
+        // range requests. PDF.js fetches only the xref table + page 1 data first,
+        // so the first page renders before the full file finishes downloading.
+        const loadingTask = pdfjsLib.getDocument({
+          url: sheet.pdfUrl,
+          rangeChunkSize: 65536,   // 64 KB chunks — standard for range requests
+          disableAutoFetch: false, // Allow background pre-fetch after page 1 loads
+          disableStream: false,    // Keep streaming enabled
+        });
+
         const pdf = await loadingTask.promise;
         setPdfDoc(pdf);
         setNumPages(pdf.numPages);
       } catch (error) {
-        console.error("Error loading PDF document:", error);
+        console.error('PDF load error:', error);
       } finally {
         setIsInitialLoading(false);
       }
     };
 
     loadPdf();
-    return () => setPdfDoc(null);
   }, [sheet?.id, sheet?.pdfUrl]);
 
   const trackInteraction = async (type: 'views' | 'downloads') => {
@@ -144,8 +211,6 @@ const FullPreviewPage: React.FC<FullPreviewPageProps> = ({
     try {
       if (user) {
         const interactionId = `${user.id}_${sheet.id}_${type}`;
-        
-        // Check if interaction already exists
         const { data: existing } = await db
           .from('interactions')
           .select('id')
@@ -153,17 +218,13 @@ const FullPreviewPage: React.FC<FullPreviewPageProps> = ({
           .single();
 
         if (!existing) {
-          // Record interaction
-          await db
-            .from('interactions')
-            .insert({ 
-              id: interactionId,
-              user_id: user.id, 
-              sheet_id: sheet.id, 
-              type 
-            });
+          await db.from('interactions').insert({
+            id: interactionId,
+            user_id: user.id,
+            sheet_id: sheet.id,
+            type,
+          });
 
-          // Increment sheet count
           const { data: currentSheet } = await db
             .from('sheets')
             .select(type)
@@ -171,16 +232,13 @@ const FullPreviewPage: React.FC<FullPreviewPageProps> = ({
             .single();
 
           const currentCount = currentSheet ? (currentSheet as any)[type] : 0;
-          await db
-            .from('sheets')
-            .update({ [type]: currentCount + 1 })
-            .eq('id', sheet.id);
+          await db.from('sheets').update({ [type]: currentCount + 1 }).eq('id', sheet.id);
         }
       } else {
         const storageKey = `solfa_sanctuary_${type}_${sheet.id}`;
         if (!localStorage.getItem(storageKey)) {
           localStorage.setItem(storageKey, 'true');
-          
+
           const { data: currentSheet } = await db
             .from('sheets')
             .select(type)
@@ -188,14 +246,11 @@ const FullPreviewPage: React.FC<FullPreviewPageProps> = ({
             .single();
 
           const currentCount = currentSheet ? (currentSheet as any)[type] : 0;
-          await db
-            .from('sheets')
-            .update({ [type]: currentCount + 1 })
-            .eq('id', sheet.id);
+          await db.from('sheets').update({ [type]: currentCount + 1 }).eq('id', sheet.id);
         }
       }
     } catch (error) {
-      console.error(`Tracking error:`, error);
+      console.error('Tracking error:', error);
     }
   };
 
@@ -221,16 +276,19 @@ const FullPreviewPage: React.FC<FullPreviewPageProps> = ({
 
   const handleShare = () => handleProtectedAction(() => {
     if (navigator.share) {
-      navigator.share({ title: sheet?.title, text: `Check out ${sheet?.title} on Sol-fa Sanctuary`, url: window.location.href }).catch(() => {});
+      navigator.share({
+        title: sheet?.title,
+        text: `Check out ${sheet?.title} on Sol-fa Sanctuary`,
+        url: window.location.href,
+      }).catch(() => {});
     } else {
       navigator.clipboard.writeText(window.location.href);
-      alert("Link copied!");
+      alert('Link copied!');
     }
   });
 
   const handlePrint = () => handleProtectedAction(() => {
     setIsPrinting(true);
-    // Give a moment for forced rendering to start before bringing up print dialog
     setTimeout(() => {
       window.print();
       setIsPrinting(false);
@@ -241,7 +299,9 @@ const FullPreviewPage: React.FC<FullPreviewPageProps> = ({
 
   const textPrimary = darkMode ? 'text-slate-100' : 'text-slate-900';
   const textSecondary = darkMode ? 'text-slate-400' : 'text-slate-600';
-  const headerBg = darkMode ? 'bg-slate-900/95 border-slate-800' : 'bg-white/95 border-slate-200 shadow-sm';
+  const headerBg = darkMode
+    ? 'bg-slate-900/95 border-slate-800'
+    : 'bg-white/95 border-slate-200 shadow-sm';
 
   return (
     <div className={`fixed inset-0 flex flex-col h-screen overflow-hidden transition-colors duration-300 ${darkMode ? 'bg-slate-950' : 'bg-slate-100'}`}>
@@ -277,12 +337,12 @@ const FullPreviewPage: React.FC<FullPreviewPageProps> = ({
             </div>
             <div className={`${isMobileMenuOpen ? 'flex' : 'hidden'} lg:flex flex-col lg:flex-row flex-1 items-start lg:items-center justify-between gap-0.5 lg:gap-0 animate-in slide-in-from-top-2 duration-300 lg:animate-none`}>
               <div className="flex-1 grid grid-cols-3 lg:grid-cols-2 justify-center gap-y-0 gap-x-2 lg:gap-x-12 lg:px-8 lg:border-x border-slate-700/50 w-full lg:w-auto">
-                 <div className="flex items-center gap-1.5 text-[10px] lg:text-[11px] min-w-0 lg:w-[100px]"><MusicIcon size={14} className="text-slate-500 shrink-0" /><span className={`font-bold truncate ${textPrimary}`}>{sheet.type}</span></div>
-                 <div className="flex items-center gap-1.5 text-[10px] lg:text-[11px] min-w-0 lg:w-auto"><Calendar size={14} className="text-slate-500 shrink-0" /><span className={`font-bold truncate ${textPrimary}`}>{sheet.uploadedAt}</span></div>
-                 <div className="lg:hidden flex items-center gap-1.5 text-[10px] min-w-0"><Eye size={14} className="text-blue-400 shrink-0" /><span className={`font-bold truncate ${textPrimary}`}>{sheet.views}</span></div>
-                 <div className="flex items-center gap-1.5 text-[10px] lg:text-[11px] min-w-0 lg:w-[100px]"><FileText size={14} className="text-slate-500 shrink-0" /><span className={`font-bold truncate ${textPrimary}`}>{sheet.fileSize}</span></div>
-                 <div className="flex items-center gap-1.5 text-[10px] lg:text-[11px] min-w-0 lg:w-auto"><User size={14} className="text-slate-500 shrink-0" /><span className={`font-bold truncate ${textPrimary}`}>{sheet.uploadedBy.split('@')[0]}</span></div>
-                 <div className="lg:hidden flex items-center gap-1.5 text-[10px] min-w-0"><Download size={14} className="text-green-500 shrink-0" /><span className={`font-bold truncate ${textPrimary}`}>{sheet.downloads}</span></div>
+                <div className="flex items-center gap-1.5 text-[10px] lg:text-[11px] min-w-0 lg:w-[100px]"><MusicIcon size={14} className="text-slate-500 shrink-0" /><span className={`font-bold truncate ${textPrimary}`}>{sheet.type}</span></div>
+                <div className="flex items-center gap-1.5 text-[10px] lg:text-[11px] min-w-0 lg:w-auto"><Calendar size={14} className="text-slate-500 shrink-0" /><span className={`font-bold truncate ${textPrimary}`}>{sheet.uploadedAt}</span></div>
+                <div className="lg:hidden flex items-center gap-1.5 text-[10px] min-w-0"><Eye size={14} className="text-blue-400 shrink-0" /><span className={`font-bold truncate ${textPrimary}`}>{sheet.views}</span></div>
+                <div className="flex items-center gap-1.5 text-[10px] lg:text-[11px] min-w-0 lg:w-[100px]"><FileText size={14} className="text-slate-500 shrink-0" /><span className={`font-bold truncate ${textPrimary}`}>{sheet.fileSize}</span></div>
+                <div className="flex items-center gap-1.5 text-[10px] lg:text-[11px] min-w-0 lg:w-auto"><User size={14} className="text-slate-500 shrink-0" /><span className={`font-bold truncate ${textPrimary}`}>{sheet.uploadedBy.split('@')[0]}</span></div>
+                <div className="lg:hidden flex items-center gap-1.5 text-[10px] min-w-0"><Download size={14} className="text-green-500 shrink-0" /><span className={`font-bold truncate ${textPrimary}`}>{sheet.downloads}</span></div>
               </div>
               <div className="flex items-center gap-2 md:gap-3 w-full lg:w-auto">
                 <button onClick={onThemeToggle} className={`p-2.5 rounded-xl border transition-colors shrink-0 ${darkMode ? 'border-slate-800 text-slate-400 hover:text-white hover:bg-slate-900' : 'border-slate-200 text-slate-500 hover:text-slate-900 hover:bg-slate-50'}`} title="Toggle Theme">{darkMode ? <Sun size={18} /> : <Moon size={18} />}</button>
@@ -306,28 +366,35 @@ const FullPreviewPage: React.FC<FullPreviewPageProps> = ({
             {isInitialLoading ? (
               <div className="absolute inset-0 flex flex-col items-center justify-center space-y-4 no-print">
                 <Loader2 className="animate-spin text-green-500" size={48} />
-                <p className={`text-sm font-medium animate-pulse ${textSecondary}`}>Opening the score...</p>
+                <p className={`text-sm font-medium animate-pulse ${textSecondary}`}>Opening the score…</p>
               </div>
             ) : (
               <div className="flex flex-col gap-4 p-2 md:p-4 bg-slate-200/5">
                 {numPages > 0 ? (
                   Array.from({ length: numPages }).map((_, i) => (
-                    <LazyPdfPage 
-                      key={i} 
-                      index={i + 1} 
-                      pdfDoc={pdfDoc} 
-                      forceRender={isPrinting} 
-                      darkMode={darkMode} 
-                      sheetTitle={sheet.title} 
+                    <LazyPdfPage
+                      key={i}
+                      index={i + 1}
+                      pdfDoc={pdfDoc}
+                      forceRender={isPrinting}
+                      darkMode={darkMode}
+                      sheetTitle={sheet.title}
+                      isFirstPage={i === 0}
                     />
                   ))
                 ) : (
-                  <div className="py-20 text-center no-print"><AlertTriangle className="mx-auto text-amber-500 mb-2" size={32} /><p className={textSecondary}>Harmony disrupted. Unable to display score.</p></div>
+                  <div className="py-20 text-center no-print">
+                    <AlertTriangle className="mx-auto text-amber-500 mb-2" size={32} />
+                    <p className={textSecondary}>Harmony disrupted. Unable to display score.</p>
+                  </div>
                 )}
               </div>
             )}
           </div>
-          <div className="mt-8 md:mt-12 mb-12 text-center max-w-2xl mx-auto space-y-4 no-print"><div className="w-12 h-1 bg-green-500 mx-auto rounded-full"></div><p className={`text-base md:text-lg italic font-serif ${textSecondary}`}>"This sheet music is provided for educational and devotional purposes. May your performance bring joy and sanctuary to all who listen."</p></div>
+          <div className="mt-8 md:mt-12 mb-12 text-center max-w-2xl mx-auto space-y-4 no-print">
+            <div className="w-12 h-1 bg-green-500 mx-auto rounded-full"></div>
+            <p className={`text-base md:text-lg italic font-serif ${textSecondary}`}>"This sheet music is provided for educational and devotional purposes. May your performance bring joy and sanctuary to all who listen."</p>
+          </div>
         </div>
       </main>
     </div>

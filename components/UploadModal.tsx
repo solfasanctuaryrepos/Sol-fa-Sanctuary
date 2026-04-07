@@ -70,7 +70,7 @@ const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose, darkMode, us
       const pdfjsLib = (window as any)['pdfjsLib'];
       if (!pdfjsLib) throw new Error('PDF.js library not found. Please refresh and try again.');
       
-      pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+      pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdn.jsdelivr.net/npm/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.js`;
       
       const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
       const pdf = await loadingTask.promise;

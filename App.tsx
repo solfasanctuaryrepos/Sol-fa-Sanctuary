@@ -21,54 +21,8 @@ const App: React.FC = () => {
   const [activePreview, setActivePreview] = useState<MusicSheet | null>(null);
   const [sheets, setSheets] = useState<MusicSheet[]>([]);
   
-  // PWA States
-  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
-  const [showInstallBanner, setShowInstallBanner] = useState(false);
-  const [isIOS, setIsIOS] = useState(false);
-
   const [currentUser, setCurrentUser] = useState<{ email: string; role: 'admin' | 'user'; emailVerified: boolean } | null>(null);
 
-  // PWA Logic: Listen for install prompt
-  useEffect(() => {
-    const handler = (e: any) => {
-      e.preventDefault();
-      setDeferredPrompt(e);
-      // Show banner after a slight delay to ensure user has landed
-      setTimeout(() => setShowInstallBanner(true), 3000);
-    };
-
-    window.addEventListener('beforeinstallprompt', handler);
-
-    // Detect iOS
-    const isIOSDevice = /iPad|iPhone|iPod/.test(navigator.userAgent) && !(window as any).MSStream;
-    const isStandalone = window.matchMedia('(display-mode: standalone)').matches || (navigator as any).standalone;
-    
-    if (isIOSDevice && !isStandalone) {
-      setIsIOS(true);
-      setTimeout(() => setShowInstallBanner(true), 5000);
-    }
-
-    return () => window.removeEventListener('beforeinstallprompt', handler);
-  }, []);
-
-  const handleInstallClick = async () => {
-    if (isIOS) {
-      alert("To install: Tap the 'Share' icon in Safari and select 'Add to Home Screen' 📱");
-      setShowInstallBanner(false);
-      return;
-    }
-
-    if (!deferredPrompt) return;
-    
-    deferredPrompt.prompt();
-    const { outcome } = await deferredPrompt.userChoice;
-    
-    if (outcome === 'accepted') {
-      console.log('User accepted the install prompt');
-    }
-    setDeferredPrompt(null);
-    setShowInstallBanner(false);
-  };
 
   // Deep linking logic: Check for sheet ID in URL on mount
   useEffect(() => {
@@ -84,7 +38,18 @@ const App: React.FC = () => {
             .single();
           
           if (data && !error) {
-            setActivePreview(data as MusicSheet);
+            // Apply the same snake_case → camelCase mapping as fetchSheets
+            const mappedSheet: MusicSheet = {
+              ...data,
+              uploadedAt: data.uploaded_at ? new Date(data.uploaded_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '',
+              fileSize: data.file_size,
+              isPublic: data.is_public,
+              isAdminRestricted: data.is_admin_restricted,
+              thumbnailUrl: data.thumbnail_url,
+              pdfUrl: data.pdf_url,
+              uploadedBy: data.uploaded_by
+            };
+            setActivePreview(mappedSheet);
           }
         } catch (error) {
           console.error("Error fetching deep-linked sheet:", error);
@@ -135,6 +100,7 @@ const App: React.FC = () => {
       }));
       
       setSheets(mappedSheets as MusicSheet[]);
+
     };
 
     fetchSheets();
@@ -151,46 +117,50 @@ const App: React.FC = () => {
     };
   }, [currentView, currentUser]);
 
+  // Helper to set user from a Supabase user object
+  const setUserFromSession = async (user: any) => {
+    if (!user || !user.email) {
+      setCurrentUser(null);
+      return;
+    }
+    try {
+      const { data: profile } = await db
+        .from('profiles')
+        .select('role')
+        .eq('id', user.id)
+        .maybeSingle();
+      const role = profile?.role || (user.email === 'solfasanctuary@gmail.com' ? 'admin' : 'user');
+      setCurrentUser({
+        email: user.email,
+        role: role as 'admin' | 'user',
+        emailVerified: !!user.email_confirmed_at
+      });
+    } catch {
+      setCurrentUser({
+        email: user.email,
+        role: user.email === 'solfasanctuary@gmail.com' ? 'admin' : 'user',
+        emailVerified: !!user.email_confirmed_at
+      });
+    }
+  };
+
+  // Single auth listener — handles initial session + sign-in/sign-out.
+  // Using INITIAL_SESSION event avoids double getSession() calls in React Strict Mode
+  // which caused Web Lock contention warnings.
   useEffect(() => {
     const { data: { subscription } } = auth.onAuthStateChange(async (event, session) => {
-      const user = session?.user;
-      if (user && user.email) {
-        setIsAuthModalOpen(false); // Close modal on success
-        try {
-          // Fetch profile to get role
-          const { data: profile, error: profileError } = await db
-            .from('profiles')
-            .select('role')
-            .eq('id', user.id)
-            .maybeSingle();
-          
-          if (profileError) {
-            console.warn("Profile fetch error (using fallback):", profileError);
-          }
-
-          const role = profile?.role || (user.email === 'solfasanctuary@gmail.com' ? 'admin' : 'user');
-          
-          setCurrentUser({ 
-            email: user.email, 
-            role: role as 'admin' | 'user', 
-            emailVerified: !!user.email_confirmed_at
-          });
-        } catch (err) {
-          console.error("Auth state processing error:", err);
-          // Still set basic user info
-          setCurrentUser({ 
-            email: user.email, 
-            role: (user.email === 'solfasanctuary@gmail.com' ? 'admin' : 'user'), 
-            emailVerified: !!user.email_confirmed_at
-          });
-        }
-      } else {
+      if (event === 'INITIAL_SESSION') {
+        await setUserFromSession(session?.user ?? null);
+      } else if (event === 'SIGNED_IN') {
+        setIsAuthModalOpen(false);
+        await setUserFromSession(session?.user ?? null);
+      } else if (event === 'SIGNED_OUT') {
         setCurrentUser(null);
       }
     });
-
     return () => subscription.unsubscribe();
   }, []);
+
 
   const handleOpenLogin = () => {
     setIsAuthModalOpen(true);
@@ -309,34 +279,6 @@ const App: React.FC = () => {
             {renderView()}
           </main>
 
-          {/* PWA Install Banner */}
-          {showInstallBanner && (
-            <div className={`fixed bottom-24 md:bottom-8 left-1/2 -translate-x-1/2 w-[90%] max-w-sm z-[100] animate-in slide-in-from-bottom-4 duration-500`}>
-              <div className={`p-4 rounded-2xl border shadow-2xl flex items-center gap-4 ${darkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'}`}>
-                <div className="w-12 h-12 bg-green-500 rounded-xl flex items-center justify-center shrink-0 shadow-lg shadow-green-500/20">
-                  <Music className="text-white" size={24} />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className={`text-sm font-bold truncate ${darkMode ? 'text-white' : 'text-slate-900'}`}>Install Sanctuary</p>
-                  <p className="text-xs text-slate-500 truncate">Access scores from your home screen</p>
-                </div>
-                <div className="flex items-center gap-2">
-                  <button 
-                    onClick={handleInstallClick}
-                    className="px-4 py-2 bg-green-500 hover:bg-green-600 text-white text-xs font-bold rounded-lg transition-colors active:scale-95"
-                  >
-                    Install
-                  </button>
-                  <button 
-                    onClick={() => setShowInstallBanner(false)}
-                    className={`p-2 transition-colors ${darkMode ? 'text-slate-500 hover:text-white' : 'text-slate-400 hover:text-slate-900'}`}
-                  >
-                    <X size={16} />
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
 
           <div className={`md:hidden fixed bottom-0 left-0 right-0 backdrop-blur-lg border-t p-2 flex justify-around items-center z-50 ${darkMode ? 'bg-slate-950/80 border-slate-800' : 'bg-white/80 border-slate-200 shadow-lg'}`}>
             <button onClick={() => { setCurrentView('home'); setActivePreview(null); }} className={`p-3 rounded-xl transition-colors ${currentView === 'home' ? 'text-green-500' : darkMode ? 'text-slate-500' : 'text-slate-400'}`}>

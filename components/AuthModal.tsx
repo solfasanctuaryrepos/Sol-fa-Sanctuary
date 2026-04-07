@@ -18,6 +18,14 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, darkMode }) => {
   const [loading, setLoading] = useState(false);
   const overlayRef = useRef<HTMLDivElement>(null);
 
+  React.useEffect(() => {
+    if (isOpen) {
+      setLoading(false);
+      setError(null);
+      setSuccessMsg(null);
+    }
+  }, [isOpen]);
+
   if (!isOpen) return null;
 
   const handleOverlayClick = (e: React.MouseEvent) => {
@@ -32,6 +40,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, darkMode }) => {
       .upsert({
         id: user.id,
         email: user.email,
+        display_name: name || user.user_metadata?.display_name || '',
         role: user.email === 'solfasanctuary@gmail.com' ? 'admin' : 'user',
       });
     
@@ -59,7 +68,8 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, darkMode }) => {
         if (signUpError) throw signUpError;
         
         if (data.user) {
-          // Profile is created by DB trigger, but we can ensure it here if needed
+          // Ensure profile exists with display name
+          await saveUserProfile(data.user, displayName);
           setSuccessMsg("Account created! A verification email has been sent to " + email + ". Please verify your email before uploading music.");
         }
       } else if (mode === 'signin') {

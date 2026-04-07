@@ -28,13 +28,33 @@
 
 ## Supabase (Migration)
 
-> No entries yet — add fixes here as migration progresses
+### `createClient` crash on missing env vars
+- **Context**: App fails to render at all — blank page
+- **Cause**: `import.meta.env.VITE_SUPABASE_URL` returns `undefined` when env vars are missing, and `createClient(undefined, undefined)` throws a runtime error
+- **Fix**: Added `|| ''` fallback: `const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || ''`
+- **Date**: 2026-03-20
+
+### Service Worker caches aggressive navigation/API responses
+- **Context**: Music sheets show on first load but then disappear or stay empty after refresh
+- **Cause**: SW v3/v4 cached same-origin assets and potentially intercepted navigation. A cached error/empty response would be served on subsequent loads.
+- **Fix**: Rewrote SW to explicitly bypass navigation, same-origin app bundles, and Supabase API. Bumped SW to v5.1.
+- **Date**: 2026-03-20
 
 ---
 
 ## Auth
 
-> No entries yet
+### `saveUserProfile` never called after signup
+- **Context**: New user profiles missing `display_name` in the `profiles` table
+- **Cause**: `saveUserProfile()` was defined in `AuthModal.tsx` but never invoked in the signup success block. Also, `display_name` was not included in the upsert payload.
+- **Fix**: Added `await saveUserProfile(data.user, displayName)` after successful signup. Added `display_name` to the upsert payload.
+- **Date**: 2026-03-20
+
+### Deep-linked sheets have undefined fields
+- **Context**: Opening a `?sheet=<id>` URL shows a broken preview with no image/title
+- **Cause**: Deep-link fetch in `App.tsx` set raw Supabase row data (snake_case) as `activePreview`, but components expect camelCase (`thumbnailUrl`, `pdfUrl`, etc.)
+- **Fix**: Applied the same `snake_case → camelCase` mapping used in `fetchSheets`
+- **Date**: 2026-03-20
 
 ---
 
