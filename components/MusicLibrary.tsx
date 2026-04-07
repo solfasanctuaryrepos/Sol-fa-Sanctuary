@@ -1,5 +1,5 @@
-import { Search, List, Grid, ChevronDown, Eye, Download, Music as MusicIcon, ArrowUp, ArrowDown, Check, MoreVertical } from 'lucide-react';
-import React, { useState, useEffect, useMemo, memo } from 'react';
+import { Search, List, Grid, Eye, Download, Music as MusicIcon, ArrowUp, ArrowDown } from 'lucide-react';
+import React, { useState, useEffect, useRef, useMemo, memo } from 'react';
 import { MusicSheet } from '../types';
 
 interface MusicLibraryProps {
@@ -12,9 +12,9 @@ interface MusicLibraryProps {
 type SortConfig = { key: keyof MusicSheet; direction: 'asc' | 'desc' } | null;
 
 // Extracted for performance optimization with memoization
-const SheetCard = memo(({ sheet, onPreview, activeMobileMenuId, setActiveMobileMenuId, darkMode }: { 
-  sheet: MusicSheet; 
-  onPreview: (s: MusicSheet) => void; 
+const SheetCard = memo(({ sheet, onPreview, activeMobileMenuId, setActiveMobileMenuId, darkMode }: {
+  sheet: MusicSheet;
+  onPreview: (s: MusicSheet) => void;
   activeMobileMenuId: string | null;
   setActiveMobileMenuId: (id: string | null) => void;
   darkMode: boolean;
@@ -23,37 +23,84 @@ const SheetCard = memo(({ sheet, onPreview, activeMobileMenuId, setActiveMobileM
   const textPrimary = darkMode ? 'text-slate-100' : 'text-slate-900';
   const textSecondary = darkMode ? 'text-slate-400' : 'text-slate-600';
 
-  const handleDownload = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    window.open(sheet.pdfUrl, '_blank');
+  const isActive = activeMobileMenuId === sheet.id;
+
+  // ── Long-press detection ─────────────────────────────────────────────────
+  // Industry standard mobile equivalent of hover: a ~350ms press-and-hold
+  // reveals the same action overlay that desktop hover shows.
+  // Used by Spotify, Apple Music, Pinterest, and Google Photos for cards.
+  const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const longPressFired = useRef(false);
+
+  const handleTouchStart = () => {
+    longPressFired.current = false;
+    longPressTimer.current = setTimeout(() => {
+      longPressFired.current = true;
+      // Subtle haptic pulse where supported (Android Chrome, some iOS)
+      if (navigator.vibrate) navigator.vibrate(10);
+      setActiveMobileMenuId(sheet.id);
+    }, 350);
   };
+
+  const cancelLongPress = () => {
+    if (longPressTimer.current) {
+      clearTimeout(longPressTimer.current);
+      longPressTimer.current = null;
+    }
+  };
+
+  // Unified click/tap handler
+  const handleClick = () => {
+    // If the long-press just fired, the overlay is opening — swallow the
+    // synthetic click so it doesn't immediately dismiss what we just showed.
+    if (longPressFired.current) {
+      longPressFired.current = false;
+      return;
+    }
+    if (isActive) {
+      setActiveMobileMenuId(null); // Tap active card again → dismiss overlay
+    } else {
+      onPreview(sheet);
+    }
+  };
+  // ─────────────────────────────────────────────────────────────────────────
 
   return (
     <div className={`border rounded-2xl overflow-hidden group hover:border-green-500/50 transition-all flex flex-col ${tableBg}`}>
-      <div 
-        className="aspect-[3/4] overflow-hidden relative cursor-pointer"
-        onClick={() => onPreview(sheet)}
+      <div
+        className="aspect-[3/4] overflow-hidden relative cursor-pointer select-none"
+        onClick={handleClick}
+        onTouchStart={handleTouchStart}
+        onTouchEnd={cancelLongPress}
+        onTouchMove={cancelLongPress}  // Finger moved = user is scrolling, not pressing
+        onContextMenu={(e) => e.preventDefault()} // Block browser's native long-press menu
       >
-        <img src={sheet.thumbnailUrl} alt={sheet.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
-        <button 
-          onClick={(e) => {
-            e.stopPropagation();
-            setActiveMobileMenuId(activeMobileMenuId === sheet.id ? null : sheet.id);
-          }}
-          className="md:hidden absolute top-2 right-2 p-2 rounded-full bg-black/50 text-white backdrop-blur-sm z-10"
-        >
-          <MoreVertical size={16} />
-        </button>
-        <div className={`absolute inset-0 bg-black/60 transition-opacity flex flex-col justify-end p-4 ${activeMobileMenuId === sheet.id ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
-          <button 
-            onClick={handleDownload}
-            className="w-full py-2.5 bg-green-500 text-white text-sm font-bold rounded-xl transform translate-y-2 group-hover:translate-y-0 transition-transform shadow-lg active:scale-95 flex items-center justify-center gap-2 hover:bg-green-600"
+        <img
+          src={sheet.thumbnailUrl}
+          alt={sheet.title}
+          draggable={false}
+          className={`w-full h-full object-cover transition-transform duration-500 ${isActive ? 'scale-105' : 'group-hover:scale-105'}`}
+        />
+
+        {/* Action overlay — shown on desktop hover OR mobile long-press */}
+        <div className={`absolute inset-0 bg-black/60 transition-opacity duration-300 flex flex-col justify-end p-4 gap-2 ${isActive ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
+          <button
+            onClick={(e) => { e.stopPropagation(); onPreview(sheet); }}
+            className="w-full py-2.5 bg-white/20 hover:bg-white/30 backdrop-blur-sm text-white text-sm font-bold rounded-xl active:scale-95 transition-all flex items-center justify-center gap-2"
+          >
+            <Eye size={18} />
+            Open Sheet
+          </button>
+          <button
+            onClick={(e) => { e.stopPropagation(); window.open(sheet.pdfUrl, '_blank'); }}
+            className="w-full py-2.5 bg-green-500 hover:bg-green-600 text-slate-950 text-sm font-bold rounded-xl shadow-lg active:scale-95 transition-all flex items-center justify-center gap-2"
           >
             <Download size={18} />
             Download
           </button>
         </div>
       </div>
+
       <div className="p-4">
         <h3 className={`font-bold truncate mb-1 ${textPrimary}`}>{sheet.title}</h3>
         <div className={`flex items-center justify-between text-xs ${textSecondary}`}>
