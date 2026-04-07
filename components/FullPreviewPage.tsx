@@ -55,11 +55,15 @@ const LazyPdfPage: React.FC<LazyPdfPageProps> = ({
   sheetTitle,
   isFirstPage,
 }) => {
-  // Page 1 starts as already "intersecting" so it renders immediately
   const [isIntersecting, setIsIntersecting] = useState(isFirstPage);
   const [imgUrl, setImgUrl] = useState<string | null>(null);
-  const [isRendering, setIsRendering] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
+
+  // Ref-based guard: prevents double-enqueue without triggering re-renders.
+  // Using state for this caused the critical bug: setIsRendering(true) inside
+  // doRender triggered the effect cleanup, which set cancelled=true and killed
+  // the render that had just started — resulting in an infinite spinner loop.
+  const hasQueued = useRef(false);
 
   // IntersectionObserver — skipped for page 1 and print mode
   useEffect(() => {
@@ -71,25 +75,25 @@ const LazyPdfPage: React.FC<LazyPdfPageProps> = ({
           observer.unobserve(entry.target);
         }
       },
-      { rootMargin: '200px' } // Tight: preloads ~1 page ahead, not all pages at once
+      { rootMargin: '200px' }
     );
     if (containerRef.current) observer.observe(containerRef.current);
     return () => observer.disconnect();
   }, [isFirstPage, forceRender]);
 
-  // Enqueue render when page becomes visible or is forced (print)
+  // Enqueue render when page becomes visible or is forced (print).
+  // Dependency array is intentionally minimal — only values that should
+  // legitimately retrigger a render (new doc, scroll into view, print).
   useEffect(() => {
-    if (!pdfDoc || imgUrl || isRendering) return;
-    if (!isIntersecting && !forceRender) return;
+    if (!pdfDoc || (!isIntersecting && !forceRender)) return;
+    if (hasQueued.current) return; // Already queued — do not enqueue again
+    hasQueued.current = true;
 
     let cancelled = false;
 
     const doRender = async () => {
-      setIsRendering(true);
       try {
         const page = await pdfDoc.getPage(index);
-
-        // Scale 1.5: crisp for A4/Letter music sheets, ~30% fewer pixels than 1.8
         const viewport = page.getViewport({ scale: 1.5 });
         const canvas = document.createElement('canvas');
         const ctx = canvas.getContext('2d');
@@ -98,10 +102,8 @@ const LazyPdfPage: React.FC<LazyPdfPageProps> = ({
         canvas.width = viewport.width;
         canvas.height = viewport.height;
         await page.render({ canvasContext: ctx, viewport }).promise;
-
         if (cancelled) return;
 
-        // Convert to JPEG Blob URL — lighter in GPU memory than keeping canvas in DOM
         canvas.toBlob(
           (blob) => {
             if (blob && !cancelled) setImgUrl(URL.createObjectURL(blob));
@@ -112,8 +114,6 @@ const LazyPdfPage: React.FC<LazyPdfPageProps> = ({
       } catch (err) {
         console.error(`Page ${index} render error:`, err);
       } finally {
-        // Always release the queue slot, even on error or cancellation
-        if (!cancelled) setIsRendering(false);
         releaseRender();
       }
     };
@@ -122,9 +122,10 @@ const LazyPdfPage: React.FC<LazyPdfPageProps> = ({
 
     return () => {
       cancelled = true;
-      // Note: releaseRender() fires in doRender's finally block even when cancelled
+      // Reset so a remount (e.g. React Strict Mode) can re-enqueue cleanly
+      hasQueued.current = false;
     };
-  }, [isIntersecting, forceRender, pdfDoc, index, imgUrl, isRendering]);
+  }, [pdfDoc, isIntersecting, forceRender, index]);
 
   // Revoke Blob URL on unmount to prevent memory leaks
   useEffect(() => () => { if (imgUrl) URL.revokeObjectURL(imgUrl); }, [imgUrl]);
