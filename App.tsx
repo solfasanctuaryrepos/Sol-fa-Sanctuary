@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Home, LayoutDashboard, ShieldAlert, Music, Upload, Info, Download, X, Smartphone } from 'lucide-react';
 import Navbar from './components/Navbar';
 import LandingPage from './components/LandingPage';
@@ -70,41 +70,39 @@ const App: React.FC = () => {
     window.history.replaceState({}, '', url.toString());
   }, [activePreview]);
 
+  const fetchSheets = useCallback(async () => {
+    let query = db.from('sheets').select('*').order('uploaded_at', { ascending: false });
+
+    if (currentView === 'admin' && currentUser?.role === 'admin') {
+      // Admin sees all
+    } else if (currentView === 'dashboard' && currentUser) {
+      query = query.eq('uploaded_by', currentUser.email);
+    } else {
+      query = query.eq('is_public', true);
+    }
+
+    const { data, error } = await query;
+    if (error) {
+      console.error("Supabase fetch error:", error);
+      return;
+    }
+
+    const mappedSheets = (data || []).map((s: any) => ({
+      ...s,
+      uploadedAt: s.uploaded_at ? new Date(s.uploaded_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '',
+      fileSize: s.file_size,
+      isPublic: s.is_public,
+      isAdminRestricted: s.is_admin_restricted,
+      thumbnailUrl: s.thumbnail_url,
+      pdfUrl: s.pdf_url,
+      uploadedBy: s.uploaded_by
+    }));
+
+    setSheets(mappedSheets as MusicSheet[]);
+  }, [currentView, currentUser]);
+
   useEffect(() => {
-    const fetchSheets = async () => {
-      let query = db.from('sheets').select('*').order('uploaded_at', { ascending: false });
-      
-      if (currentView === 'admin' && currentUser?.role === 'admin') {
-        // Admin sees all
-      } else if (currentView === 'dashboard' && currentUser) {
-        query = query.eq('uploaded_by', currentUser.email);
-      } else {
-        query = query.eq('is_public', true);
-      }
-
-      const { data, error } = await query;
-      if (error) {
-        console.error("Supabase fetch error:", error);
-        return;
-      }
-      
-      const mappedSheets = (data || []).map((s: any) => ({
-        ...s,
-        uploadedAt: s.uploaded_at ? new Date(s.uploaded_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '',
-        fileSize: s.file_size,
-        isPublic: s.is_public,
-        isAdminRestricted: s.is_admin_restricted,
-        thumbnailUrl: s.thumbnail_url,
-        pdfUrl: s.pdf_url,
-        uploadedBy: s.uploaded_by
-      }));
-      
-      setSheets(mappedSheets as MusicSheet[]);
-
-    };
-
     fetchSheets();
-    // Real-time subscription
     const channel = supabase
       .channel('public:sheets')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'sheets' }, () => {
@@ -115,7 +113,7 @@ const App: React.FC = () => {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [currentView, currentUser]);
+  }, [fetchSheets]);
 
   // Helper to set user from a Supabase user object
   const setUserFromSession = async (user: any) => {
@@ -227,10 +225,11 @@ const App: React.FC = () => {
         return <MusicLibrary darkMode={darkMode} initialSearch={searchQuery} onPreview={handlePreview} sheets={sheets} />;
       case 'admin':
         return currentUser?.role === 'admin' ? (
-          <AdminDashboard 
-            onPreview={handlePreview} 
-            darkMode={darkMode} 
+          <AdminDashboard
+            onPreview={handlePreview}
+            darkMode={darkMode}
             sheets={sheets}
+            onRefresh={fetchSheets}
           />
         ) : null;
       case 'about':

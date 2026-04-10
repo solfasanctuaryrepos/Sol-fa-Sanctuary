@@ -1,6 +1,6 @@
 
 import { Search, Trash2, ChevronDown, Music, List, Grid, X, ArrowUp, ArrowDown, Lock, Unlock, Globe, Eye, Download, Check, Settings2, Calendar, Users, Shield, User as UserIcon, AlertTriangle, MoreVertical } from 'lucide-react';
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { AdminTab, MusicSheet, User } from '../types';
 import { db } from '../supabase';
 
@@ -8,11 +8,12 @@ interface AdminDashboardProps {
   onPreview: (sheet: MusicSheet) => void;
   darkMode: boolean;
   sheets: MusicSheet[];
+  onRefresh: () => void;
 }
 
 type SortConfig = { key: string; direction: 'asc' | 'desc' } | null;
 
-const AdminDashboard: React.FC<AdminDashboardProps> = ({ onPreview, darkMode, sheets }) => {
+const AdminDashboard: React.FC<AdminDashboardProps> = ({ onPreview, darkMode, sheets, onRefresh }) => {
   const [activeTab, setActiveTab] = useState<AdminTab>('content');
   const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
   const [searchTerm, setSearchTerm] = useState('');
@@ -48,21 +49,21 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onPreview, darkMode, sh
     createdAt: true,
   });
 
+  const fetchUsers = useCallback(async () => {
+    const { data, error } = await db
+      .from('profiles')
+      .select('*')
+      .order('email', { ascending: true });
+
+    if (error) {
+      console.error("Error fetching users:", error);
+      return;
+    }
+    setUsers(data as User[]);
+  }, []);
+
   useEffect(() => {
     if (activeTab === 'users') {
-      const fetchUsers = async () => {
-        const { data, error } = await db
-          .from('profiles')
-          .select('*')
-          .order('email', { ascending: true });
-        
-        if (error) {
-          console.error("Error fetching users:", error);
-          return;
-        }
-        setUsers(data as User[]);
-      };
-
       fetchUsers();
 
       const channel = db
@@ -76,7 +77,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onPreview, darkMode, sh
         db.removeChannel(channel);
       };
     }
-  }, [activeTab]);
+  }, [activeTab, fetchUsers]);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -112,8 +113,9 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onPreview, darkMode, sh
         .from('sheets')
         .update({ is_admin_restricted: !sheet.isAdminRestricted })
         .eq('id', sheet.id);
-      
+
       if (error) throw error;
+      onRefresh();
     } catch (error: any) {
       console.error("Restriction error:", error);
       alert(`Failed to update restriction status: ${error.message || 'Unknown error'}`);
@@ -130,8 +132,9 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onPreview, darkMode, sh
         .from('profiles')
         .update({ role: user.role === 'admin' ? 'user' : 'admin' })
         .eq('id', user.id);
-      
+
       if (error) throw error;
+      fetchUsers();
     } catch (error: any) {
       alert("Failed to update user role.");
     }
@@ -143,13 +146,13 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onPreview, darkMode, sh
       return;
     }
     try {
-      // Supabase Auth manages status via other means, but we can track active/inactive in profiles
       const { error } = await db
         .from('profiles')
         .update({ status: user.status === 'Active' ? 'Inactive' : 'Active' })
         .eq('id', user.id);
-      
+
       if (error) throw error;
+      fetchUsers();
     } catch (error: any) {
       alert("Failed to update user status.");
     }
@@ -181,16 +184,21 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onPreview, darkMode, sh
 
   const executeDeletion = async () => {
     if (!deleteConfirmation) return;
-    
+
     try {
       const tableName = deleteConfirmation.type === 'sheet' ? 'sheets' : 'profiles';
       const { error } = await db
         .from(tableName)
         .delete()
         .eq('id', deleteConfirmation.id);
-      
+
       if (error) throw error;
       setDeleteConfirmation(null);
+      if (deleteConfirmation.type === 'sheet') {
+        onRefresh();
+      } else {
+        fetchUsers();
+      }
     } catch (error: any) {
       console.error("Deletion error:", error);
       alert(`Failed to delete: ${error.message || 'Unknown error'}`);
