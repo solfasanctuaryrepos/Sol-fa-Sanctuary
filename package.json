@@ -10,7 +10,6 @@
     "lint": "tsc --noEmit"
   },
   "dependencies": {
-    "@sentry/react": "^8.55.0",
     "@supabase/supabase-js": "^2.99.2",
     "@tailwindcss/vite": "^4.2.2",
     "lucide-react": "^0.564.0",

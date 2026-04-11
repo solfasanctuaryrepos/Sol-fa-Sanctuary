@@ -14,7 +14,6 @@
 | Tailwind CSS | 3.x |
 | Lucide React | latest |
 | Supabase JS | v2.x |
-| @sentry/react | v8.x |
 
 ---
 
