@@ -22,6 +22,9 @@ const App: React.FC = () => {
   const [sheets, setSheets] = useState<MusicSheet[]>([]);
   
   const [currentUser, setCurrentUser] = useState<{ email: string; role: 'admin' | 'user'; emailVerified: boolean } | null>(null);
+  // Gate that opens after INITIAL_SESSION fires — prevents fetchSheets from running
+  // before auth state is known (fixes blank sheets + broken login with stale tokens)
+  const [sessionInitialized, setSessionInitialized] = useState(false);
 
 
   // Deep linking logic: Check for sheet ID in URL on mount
@@ -102,6 +105,12 @@ const App: React.FC = () => {
   }, [currentView, currentUser]);
 
   useEffect(() => {
+    // Don't fetch until we know whether the user is logged in or not.
+    // INITIAL_SESSION fires once on startup and sets sessionInitialized = true.
+    // This prevents a race where fetchSheets runs with a stale/revoked token
+    // and the client gets stuck, leaving sheets blank and blocking re-login.
+    if (!sessionInitialized) return;
+
     fetchSheets();
     const channel = supabase
       .channel('public:sheets')
@@ -113,7 +122,7 @@ const App: React.FC = () => {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [fetchSheets]);
+  }, [fetchSheets, sessionInitialized]);
 
   // Helper to set user from a Supabase user object
   const setUserFromSession = async (user: any) => {
@@ -149,6 +158,8 @@ const App: React.FC = () => {
     const { data: { subscription } } = auth.onAuthStateChange(async (event, session) => {
       if (event === 'INITIAL_SESSION') {
         await setUserFromSession(session?.user ?? null);
+        // Unlock data fetching now that auth state is known
+        setSessionInitialized(true);
       } else if (event === 'SIGNED_IN') {
         setIsAuthModalOpen(false);
         await setUserFromSession(session?.user ?? null);
@@ -165,9 +176,11 @@ const App: React.FC = () => {
   };
 
   const handleLogout = () => {
-    // Fire and forget to prevent UI hanging on Web Lock or network issues
-    auth.signOut().catch(err => console.error("Supabase signout issue:", err));
-    
+    // Use scope:'local' — clears localStorage immediately without a network call or
+    // Web Lock. This guarantees the stale token is removed even if the network is
+    // slow or the global signOut hangs, which was causing re-login to break.
+    auth.signOut({ scope: 'local' }).catch(err => console.error("Supabase signout issue:", err));
+
     // Instantly update local UI state
     setCurrentUser(null);
     setCurrentView('home');
