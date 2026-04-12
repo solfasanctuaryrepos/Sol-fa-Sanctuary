@@ -1,5 +1,5 @@
 
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Upload, Music, Eye, Download, Search, List, Grid, MoreVertical, Edit2, Trash2, FileText, ArrowUp, ArrowDown, X, Check, Lock, ShieldAlert, Globe, AlertTriangle } from 'lucide-react';
 import { MusicSheet } from '../types';
 import { db } from '../supabase';
@@ -73,7 +73,10 @@ const Dashboard: React.FC<DashboardProps> = ({ onUploadClick, onPreview, darkMod
 
   const handleDownload = (e: React.MouseEvent, sheet: MusicSheet) => {
     e.stopPropagation();
-    window.open(sheet.pdfUrl, '_blank');
+    const a = document.createElement('a');
+    a.href = sheet.pdfUrl;
+    a.download = `${sheet.title}.pdf`;
+    a.click();
   };
 
   const handleDelete = (e: React.MouseEvent, sheet: MusicSheet) => {
@@ -237,11 +240,12 @@ const Dashboard: React.FC<DashboardProps> = ({ onUploadClick, onPreview, darkMod
                   </div>
 
                   {/* Mobile Trigger Button: Swapped to top-right to match standard UX patterns */}
-                  <button 
+                  <button
                     onClick={(e) => {
                       e.stopPropagation();
                       setActiveMobileMenuId(activeMobileMenuId === sheet.id ? null : sheet.id);
                     }}
+                    aria-label="More actions"
                     className="md:hidden absolute top-2 right-2 p-2 rounded-full bg-black/50 text-white backdrop-blur-sm z-10"
                   >
                     <MoreVertical size={16} />
@@ -250,25 +254,28 @@ const Dashboard: React.FC<DashboardProps> = ({ onUploadClick, onPreview, darkMod
                   <div className={`absolute inset-0 bg-black/60 transition-opacity flex flex-col p-4 ${activeMobileMenuId === sheet.id ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
                     {/* Action buttons moved to the center of the card to clear corner controls */}
                     <div className="flex-1 flex items-center justify-center gap-4 transform -translate-y-2 group-hover:translate-y-0 transition-transform delay-75">
-                      <button 
+                      <button
                         type="button"
                         onClick={(e) => toggleVisibility(e, sheet)}
+                        aria-label={sheet.isPublic ? 'Make private' : 'Make public'}
                         className={`p-3 rounded-full backdrop-blur-md border border-white/20 text-white transition-all hover:scale-110 active:scale-90 ${sheet.isPublic ? 'bg-blue-500/40 hover:bg-blue-500' : 'bg-slate-700/40 hover:bg-slate-700'}`}
                         title={sheet.isPublic ? "Make Private" : "Make Public"}
                       >
                         {sheet.isPublic ? <Lock size={20} /> : <Globe size={20} />}
                       </button>
-                      <button 
+                      <button
                         type="button"
                         onClick={(e) => handleEdit(e, sheet)}
+                        aria-label="Edit sheet"
                         className="p-3 rounded-full backdrop-blur-md border border-white/20 bg-white/10 text-white hover:bg-green-500 transition-all hover:scale-110 active:scale-90"
                         title="Edit"
                       >
                         <Edit2 size={20} />
                       </button>
-                      <button 
+                      <button
                         type="button"
                         onClick={(e) => handleDelete(e, sheet)}
+                        aria-label="Delete sheet"
                         className="p-3 rounded-full backdrop-blur-md border border-white/20 bg-white/10 text-white hover:bg-red-500 transition-all hover:scale-110 active:scale-90"
                         title="Delete"
                       >
@@ -277,9 +284,10 @@ const Dashboard: React.FC<DashboardProps> = ({ onUploadClick, onPreview, darkMod
                     </div>
 
                     <div className="flex shrink-0">
-                      <button 
+                      <button
                         type="button"
                         onClick={(e) => handleDownload(e, sheet)}
+                        aria-label={`Download ${sheet.title}`}
                         className="w-full py-2.5 bg-green-500 text-white text-sm font-bold rounded-xl transform translate-y-2 group-hover:translate-y-0 transition-transform shadow-lg active:scale-95 flex items-center justify-center gap-2 hover:bg-green-600"
                       >
                         <Download size={18} />
@@ -362,34 +370,38 @@ const Dashboard: React.FC<DashboardProps> = ({ onUploadClick, onPreview, darkMod
                       <td className="px-4 md:px-6 py-4 text-right">
                         {/* Added text-white on mobile to dashboard list actions as requested */}
                         <div className="flex items-center justify-end gap-1 max-md:text-white">
-                          <button 
+                          <button
                             type="button"
                             onClick={(e) => toggleVisibility(e, sheet)}
+                            aria-label={sheet.isPublic ? 'Make private' : 'Make public'}
                             className={`p-2 transition-colors ${sheet.isPublic ? 'hover:text-amber-500' : 'hover:text-green-500'}`}
                             title={sheet.isPublic ? "Make Private" : "Make Public"}
                           >
                             {sheet.isPublic ? <Lock size={16}/> : <Globe size={16}/>}
                           </button>
-                          <button 
+                          <button
                             type="button"
                             onClick={(e) => handleDownload(e, sheet)}
-                            className="p-2 hover:text-green-500 transition-colors" 
+                            aria-label={`Download ${sheet.title}`}
+                            className="p-2 hover:text-green-500 transition-colors"
                             title="Download"
                           >
                             <Download size={16}/>
                           </button>
-                          <button 
+                          <button
                             type="button"
                             onClick={(e) => handleEdit(e, sheet)}
-                            className="p-2 hover:text-blue-500 transition-colors" 
+                            aria-label="Edit sheet"
+                            className="p-2 hover:text-blue-500 transition-colors"
                             title="Edit"
                           >
                             <Edit2 size={16}/>
                           </button>
-                          <button 
+                          <button
                             type="button"
                             onClick={(e) => handleDelete(e, sheet)}
-                            className="p-2 hover:text-red-500 transition-colors" 
+                            aria-label="Delete sheet"
+                            className="p-2 hover:text-red-500 transition-colors"
                             title="Delete"
                           >
                             <Trash2 size={16}/>
@@ -416,43 +428,94 @@ const Dashboard: React.FC<DashboardProps> = ({ onUploadClick, onPreview, darkMod
 
       {/* Custom Delete Confirmation Modal */}
       {deleteConfirmation && (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center px-4 bg-black/70 backdrop-blur-sm animate-in fade-in duration-300">
-          <div className={`w-full max-w-md rounded-3xl overflow-hidden border animate-in zoom-in-95 duration-200 ${darkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200 shadow-2xl'}`}>
-            <div className="p-8">
-              <div className="w-16 h-16 rounded-2xl bg-red-500/10 flex items-center justify-center mx-auto mb-6">
-                <AlertTriangle className="text-red-500" size={32} />
-              </div>
-              
-              <div className="text-center mb-8">
-                <h2 className={`text-2xl font-serif font-bold mb-2 ${textPrimary}`}>Confirm Deletion</h2>
-                <p className={`${textSecondary}`}>
-                  Are you sure you want to permanently delete <span className="font-bold text-red-500">{deleteConfirmation.title}</span>? 
-                  This action cannot be undone.
-                </p>
-              </div>
-
-              <div className="flex gap-3">
-                <button 
-                  onClick={() => setDeleteConfirmation(null)}
-                  className={`flex-1 py-3.5 font-bold rounded-xl border transition-all active:scale-95 ${darkMode ? 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700' : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'}`}
-                >
-                  Cancel
-                </button>
-                <button 
-                  onClick={executeDeletion}
-                  className="flex-1 py-3.5 bg-red-500 hover:bg-red-600 text-white font-bold rounded-xl transition-all shadow-xl shadow-red-500/20 active:scale-95 flex items-center justify-center gap-2"
-                >
-                  <Trash2 size={18} />
-                  Delete
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
+        <DeleteConfirmModal
+          title={deleteConfirmation.title}
+          darkMode={darkMode}
+          onCancel={() => setDeleteConfirmation(null)}
+          onConfirm={executeDeletion}
+          textPrimary={textPrimary}
+          textSecondary={textSecondary}
+        />
       )}
     </div>
   );
 };
+
+// ── Focus-trapped delete confirmation modal ───────────────────────────────────
+interface DeleteConfirmModalProps {
+  title: string;
+  darkMode: boolean;
+  onCancel: () => void;
+  onConfirm: () => void;
+  textPrimary: string;
+  textSecondary: string;
+}
+
+const DeleteConfirmModal: React.FC<DeleteConfirmModalProps> = ({ title, darkMode, onCancel, onConfirm, textPrimary, textSecondary }) => {
+  const modalRef = useRef<HTMLDivElement>(null);
+  const previousFocusRef = useRef<HTMLElement | null>(null);
+
+  useEffect(() => {
+    previousFocusRef.current = document.activeElement as HTMLElement;
+    const focusable = () => modalRef.current?.querySelectorAll<HTMLElement>(
+      'a[href], button:not([disabled]), input, select, textarea'
+    ) ?? [];
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== 'Tab') return;
+      const els = Array.from(focusable());
+      if (els.length === 0) return;
+      const first = els[0];
+      const last = els[els.length - 1];
+      if (e.shiftKey) {
+        if (document.activeElement === first) { e.preventDefault(); last.focus(); }
+      } else {
+        if (document.activeElement === last) { e.preventDefault(); first.focus(); }
+      }
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    setTimeout(() => focusable()[0]?.focus(), 50);
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+      previousFocusRef.current?.focus();
+    };
+  }, []);
+
+  return (
+    <div className="fixed inset-0 z-[200] flex items-center justify-center px-4 bg-black/70 backdrop-blur-sm animate-in fade-in duration-300">
+      <div ref={modalRef} className={`w-full max-w-md rounded-3xl overflow-hidden border animate-in zoom-in-95 duration-200 ${darkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200 shadow-2xl'}`}>
+        <div className="p-8">
+          <div className="w-16 h-16 rounded-2xl bg-red-500/10 flex items-center justify-center mx-auto mb-6">
+            <AlertTriangle className="text-red-500" size={32} />
+          </div>
+          <div className="text-center mb-8">
+            <h2 className={`text-2xl font-serif font-bold mb-2 ${textPrimary}`}>Confirm Deletion</h2>
+            <p className={`${textSecondary}`}>
+              Are you sure you want to permanently delete <span className="font-bold text-red-500">{title}</span>?
+              This action cannot be undone.
+            </p>
+          </div>
+          <div className="flex gap-3">
+            <button
+              autoFocus
+              onClick={onCancel}
+              className={`flex-1 py-3.5 font-bold rounded-xl border transition-all active:scale-95 ${darkMode ? 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700' : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'}`}
+            >
+              Cancel
+            </button>
+            <button
+              onClick={onConfirm}
+              className="flex-1 py-3.5 bg-red-500 hover:bg-red-600 text-white font-bold rounded-xl transition-all shadow-xl shadow-red-500/20 active:scale-95 flex items-center justify-center gap-2"
+            >
+              <Trash2 size={18} />
+              Delete
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+// ─────────────────────────────────────────────────────────────────────────────
 
 interface EditSheetModalProps {
   sheet: MusicSheet;
@@ -464,6 +527,33 @@ interface EditSheetModalProps {
 const EditSheetModal: React.FC<EditSheetModalProps> = ({ sheet, onClose, onSave, darkMode }) => {
   const [formData, setFormData] = useState<MusicSheet>({ ...sheet });
   const overlayRef = useRef<HTMLDivElement>(null);
+  const modalRef = useRef<HTMLDivElement>(null);
+  const previousFocusRef = useRef<HTMLElement | null>(null);
+
+  useEffect(() => {
+    previousFocusRef.current = document.activeElement as HTMLElement;
+    const focusable = () => modalRef.current?.querySelectorAll<HTMLElement>(
+      'a[href], button:not([disabled]), input, select, textarea'
+    ) ?? [];
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== 'Tab') return;
+      const els = Array.from(focusable());
+      if (els.length === 0) return;
+      const first = els[0];
+      const last = els[els.length - 1];
+      if (e.shiftKey) {
+        if (document.activeElement === first) { e.preventDefault(); last.focus(); }
+      } else {
+        if (document.activeElement === last) { e.preventDefault(); first.focus(); }
+      }
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    setTimeout(() => focusable()[0]?.focus(), 50);
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+      previousFocusRef.current?.focus();
+    };
+  }, []);
 
   const bgClass = darkMode ? 'bg-[#0f172a] border-slate-800' : 'bg-white border-slate-200 shadow-2xl';
   const textPrimary = darkMode ? 'text-slate-100' : 'text-slate-900';
@@ -481,7 +571,7 @@ const EditSheetModal: React.FC<EditSheetModalProps> = ({ sheet, onClose, onSave,
       onClick={(e) => e.target === overlayRef.current && onClose()}
       className="fixed inset-0 z-[200] flex items-center justify-center px-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200"
     >
-      <div className={`w-full max-w-xl rounded-2xl overflow-hidden border animate-in zoom-in-95 duration-200 ${bgClass}`}>
+      <div ref={modalRef} className={`w-full max-w-xl rounded-2xl overflow-hidden border animate-in zoom-in-95 duration-200 ${bgClass}`}>
         <div className={`flex items-center justify-between p-6 border-b ${darkMode ? 'border-slate-800' : 'border-slate-100'}`}>
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 bg-green-500/10 rounded-full flex items-center justify-center">
@@ -492,7 +582,7 @@ const EditSheetModal: React.FC<EditSheetModalProps> = ({ sheet, onClose, onSave,
               <p className={`text-sm ${textSecondary}`}>Update the details for this piece in the sanctuary.</p>
             </div>
           </div>
-          <button type="button" onClick={onClose} className="text-slate-400 hover:text-green-500 transition-colors">
+          <button type="button" onClick={onClose} aria-label="Close edit modal" className="text-slate-400 hover:text-green-500 transition-colors">
             <X size={20} />
           </button>
         </div>

@@ -1,6 +1,6 @@
 
 import { Search, Trash2, ChevronDown, Music, List, Grid, X, ArrowUp, ArrowDown, Lock, Unlock, Globe, Eye, Download, Check, Settings2, Calendar, Users, Shield, User as UserIcon, AlertTriangle, MoreVertical } from 'lucide-react';
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect, useCallback, memo } from 'react';
 import { AdminTab, MusicSheet, User } from '../types';
 import { db } from '../supabase';
 
@@ -380,11 +380,12 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onPreview, darkMode, sh
                       </div>
 
                       {/* Mobile Trigger Button moved to top-right */}
-                      <button 
+                      <button
                         onClick={(e) => {
                           e.stopPropagation();
                           setActiveMobileMenuId(activeMobileMenuId === sheet.id ? null : sheet.id);
                         }}
+                        aria-label="More actions"
                         className="md:hidden absolute top-2 right-2 p-2 rounded-full bg-black/50 text-white backdrop-blur-sm z-10"
                       >
                         <MoreVertical size={16} />
@@ -393,17 +394,19 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onPreview, darkMode, sh
                       <div className={`absolute inset-0 bg-black/60 transition-opacity flex flex-col p-4 ${activeMobileMenuId === sheet.id ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
                         {/* Centered actions to avoid overlap with top controls */}
                         <div className="flex-1 flex items-center justify-center gap-4 transform -translate-y-2 group-hover:translate-y-0 transition-transform delay-75">
-                          <button 
+                          <button
                             type="button"
-                            onClick={(e) => toggleAdminRestriction(e, sheet)} 
+                            onClick={(e) => toggleAdminRestriction(e, sheet)}
+                            aria-label={sheet.isAdminRestricted ? 'Approve sheet' : 'Restrict sheet'}
                             className={`p-3 rounded-full backdrop-blur-md border border-white/20 text-white transition-all hover:scale-110 active:scale-90 ${sheet.isAdminRestricted ? 'bg-red-500/40 hover:bg-red-500' : 'bg-green-500/40 hover:bg-green-500'}`}
                             title={sheet.isAdminRestricted ? 'Approve' : 'Restrict'}
                           >
                             {sheet.isAdminRestricted ? <Unlock size={20}/> : <Lock size={20}/>}
                           </button>
-                          <button 
+                          <button
                             type="button"
-                            onClick={(e) => handleDeleteSheet(e, sheet)} 
+                            onClick={(e) => handleDeleteSheet(e, sheet)}
+                            aria-label="Delete sheet permanently"
                             className="p-3 rounded-full backdrop-blur-md border border-white/20 bg-white/10 text-white hover:bg-red-500 transition-all hover:scale-110 active:scale-90"
                             title="Delete Permanently"
                           >
@@ -412,9 +415,10 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onPreview, darkMode, sh
                         </div>
 
                         <div className="flex shrink-0">
-                          <button 
+                          <button
                             type="button"
-                            onClick={(e) => { e.stopPropagation(); window.open(sheet.pdfUrl, '_blank'); }}
+                            onClick={(e) => { e.stopPropagation(); const a = document.createElement('a'); a.href = sheet.pdfUrl; a.download = `${sheet.title}.pdf`; a.click(); }}
+                            aria-label={`Download ${sheet.title}`}
                             className="w-full py-2.5 bg-green-500 text-white text-sm font-bold rounded-xl transform translate-y-2 group-hover:translate-y-0 transition-transform shadow-lg active:scale-95 flex items-center justify-center gap-2 hover:bg-green-600"
                           >
                             <Download size={18} />
@@ -527,26 +531,29 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onPreview, darkMode, sh
                         <td className="px-4 md:px-6 py-4 text-right">
                           {/* Added text-white on mobile to admin content list actions as requested */}
                           <div className="flex items-center justify-end gap-1 max-md:text-white">
-                            <button 
+                            <button
                               type="button"
                               onClick={(e) => toggleAdminRestriction(e, sheet)}
+                              aria-label={sheet.isAdminRestricted ? 'Approve sheet' : 'Restrict sheet'}
                               className={`p-2 transition-colors ${sheet.isAdminRestricted ? 'hover:text-green-500' : 'hover:text-red-500'}`}
                               title={sheet.isAdminRestricted ? 'Approve' : 'Restrict'}
                             >
                               {sheet.isAdminRestricted ? <Unlock size={16}/> : <Lock size={16}/>}
                             </button>
-                            <button 
+                            <button
                               type="button"
-                              onClick={(e) => { e.stopPropagation(); window.open(sheet.pdfUrl, '_blank'); }}
-                              className="p-2 hover:text-green-500 transition-colors" 
+                              onClick={(e) => { e.stopPropagation(); const a = document.createElement('a'); a.href = sheet.pdfUrl; a.download = `${sheet.title}.pdf`; a.click(); }}
+                              aria-label={`Download ${sheet.title}`}
+                              className="p-2 hover:text-green-500 transition-colors"
                               title="Download"
                             >
                               <Download size={16}/>
                             </button>
-                            <button 
+                            <button
                               type="button"
                               onClick={(e) => handleDeleteSheet(e, sheet)}
-                              className="p-2 hover:text-red-500 transition-colors" 
+                              aria-label="Delete sheet permanently"
+                              className="p-2 hover:text-red-500 transition-colors"
                               title="Delete Permanently"
                             >
                               <Trash2 size={16}/>
@@ -621,23 +628,26 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onPreview, darkMode, sh
                       <td className="px-4 md:px-6 py-4 text-right">
                         {/* Added text-white on mobile to admin user list actions as requested */}
                         <div className="flex items-center justify-end gap-1 max-md:text-white">
-                          <button 
+                          <button
                             onClick={() => toggleUserRole(user)}
-                            className="p-2 hover:text-purple-500 transition-colors" 
+                            aria-label={user.role === 'admin' ? 'Demote to user' : 'Promote to admin'}
+                            className="p-2 hover:text-purple-500 transition-colors"
                             title="Toggle Admin Role"
                           >
                             <Shield size={16}/>
                           </button>
-                          <button 
+                          <button
                             onClick={() => toggleUserStatus(user)}
+                            aria-label={user.status === 'Active' ? 'Deactivate user' : 'Activate user'}
                             className={`p-2 transition-colors ${user.status === 'Active' ? 'hover:text-red-500' : 'hover:text-green-500'}`}
                             title={user.status === 'Active' ? "Deactivate User" : "Activate User"}
                           >
                             {user.status === 'Active' ? <Lock size={16}/> : <Unlock size={16}/>}
                           </button>
-                          <button 
+                          <button
                             onClick={() => handleDeleteUser(user)}
-                            className="p-2 hover:text-red-500 transition-colors" 
+                            aria-label="Delete user"
+                            className="p-2 hover:text-red-500 transition-colors"
                             title="Delete User"
                           >
                             <Trash2 size={16}/>
@@ -662,42 +672,93 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onPreview, darkMode, sh
 
       {/* Custom Delete Confirmation Modal */}
       {deleteConfirmation && (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center px-4 bg-black/70 backdrop-blur-sm animate-in fade-in duration-300">
-          <div className={`w-full max-w-md rounded-3xl overflow-hidden border animate-in zoom-in-95 duration-200 ${darkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200 shadow-2xl'}`}>
-            <div className="p-8">
-              <div className="w-16 h-16 rounded-2xl bg-red-500/10 flex items-center justify-center mx-auto mb-6">
-                <AlertTriangle className="text-red-500" size={32} />
-              </div>
-              
-              <div className="text-center mb-8">
-                <h2 className={`text-2xl font-serif font-bold mb-2 ${textPrimary}`}>Confirm Deletion</h2>
-                <p className={`${textSecondary}`}>
-                  Are you sure you want to permanently delete <span className="font-bold text-red-500">{deleteConfirmation.title}</span>? 
-                  This action cannot be undone.
-                </p>
-              </div>
-
-              <div className="flex gap-3">
-                <button 
-                  onClick={() => setDeleteConfirmation(null)}
-                  className={`flex-1 py-3.5 font-bold rounded-xl border transition-all active:scale-95 ${darkMode ? 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700' : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'}`}
-                >
-                  Cancel
-                </button>
-                <button 
-                  onClick={executeDeletion}
-                  className="flex-1 py-3.5 bg-red-500 hover:bg-red-600 text-white font-bold rounded-xl transition-all shadow-xl shadow-red-500/20 active:scale-95 flex items-center justify-center gap-2"
-                >
-                  <Trash2 size={18} />
-                  Delete
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
+        <AdminDeleteConfirmModal
+          title={deleteConfirmation.title}
+          darkMode={darkMode}
+          onCancel={() => setDeleteConfirmation(null)}
+          onConfirm={executeDeletion}
+          textPrimary={textPrimary}
+          textSecondary={textSecondary}
+        />
       )}
     </div>
   );
 };
+
+// ── Focus-trapped delete confirmation modal for AdminDashboard ────────────────
+interface AdminDeleteConfirmModalProps {
+  title: string;
+  darkMode: boolean;
+  onCancel: () => void;
+  onConfirm: () => void;
+  textPrimary: string;
+  textSecondary: string;
+}
+
+const AdminDeleteConfirmModal: React.FC<AdminDeleteConfirmModalProps> = ({ title, darkMode, onCancel, onConfirm, textPrimary, textSecondary }) => {
+  const modalRef = useRef<HTMLDivElement>(null);
+  const previousFocusRef = useRef<HTMLElement | null>(null);
+
+  useEffect(() => {
+    previousFocusRef.current = document.activeElement as HTMLElement;
+    const focusable = () => modalRef.current?.querySelectorAll<HTMLElement>(
+      'a[href], button:not([disabled]), input, select, textarea'
+    ) ?? [];
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== 'Tab') return;
+      const els = Array.from(focusable());
+      if (els.length === 0) return;
+      const first = els[0];
+      const last = els[els.length - 1];
+      if (e.shiftKey) {
+        if (document.activeElement === first) { e.preventDefault(); last.focus(); }
+      } else {
+        if (document.activeElement === last) { e.preventDefault(); first.focus(); }
+      }
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    setTimeout(() => focusable()[0]?.focus(), 50);
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+      previousFocusRef.current?.focus();
+    };
+  }, []);
+
+  return (
+    <div className="fixed inset-0 z-[200] flex items-center justify-center px-4 bg-black/70 backdrop-blur-sm animate-in fade-in duration-300">
+      <div ref={modalRef} className={`w-full max-w-md rounded-3xl overflow-hidden border animate-in zoom-in-95 duration-200 ${darkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200 shadow-2xl'}`}>
+        <div className="p-8">
+          <div className="w-16 h-16 rounded-2xl bg-red-500/10 flex items-center justify-center mx-auto mb-6">
+            <AlertTriangle className="text-red-500" size={32} />
+          </div>
+          <div className="text-center mb-8">
+            <h2 className={`text-2xl font-serif font-bold mb-2 ${textPrimary}`}>Confirm Deletion</h2>
+            <p className={`${textSecondary}`}>
+              Are you sure you want to permanently delete <span className="font-bold text-red-500">{title}</span>?
+              This action cannot be undone.
+            </p>
+          </div>
+          <div className="flex gap-3">
+            <button
+              autoFocus
+              onClick={onCancel}
+              className={`flex-1 py-3.5 font-bold rounded-xl border transition-all active:scale-95 ${darkMode ? 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700' : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'}`}
+            >
+              Cancel
+            </button>
+            <button
+              onClick={onConfirm}
+              className="flex-1 py-3.5 bg-red-500 hover:bg-red-600 text-white font-bold rounded-xl transition-all shadow-xl shadow-red-500/20 active:scale-95 flex items-center justify-center gap-2"
+            >
+              <Trash2 size={18} />
+              Delete
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+// ─────────────────────────────────────────────────────────────────────────────
 
 export default AdminDashboard;

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Download, Share2, Printer, Eye, Calendar, User, FileText, Music as MusicIcon, X, Moon, Sun, ExternalLink, Menu, ChevronUp, Loader2, AlertTriangle } from 'lucide-react';
+import { Download, Share2, Printer, Eye, Calendar, User, FileText, Music as MusicIcon, X, Moon, Sun, ExternalLink, Menu, ChevronUp, Loader2, AlertTriangle, AlertCircle } from 'lucide-react';
 import { MusicSheet } from '../types';
 import { db } from '../supabase';
 
@@ -163,6 +163,9 @@ const FullPreviewPage: React.FC<FullPreviewPageProps> = ({
   const [numPages, setNumPages] = useState(0);
   const [isInitialLoading, setIsInitialLoading] = useState(true);
   const [isPrinting, setIsPrinting] = useState(false);
+  const [pdfError, setPdfError] = useState<string | null>(null);
+  const [pdfLoadKey, setPdfLoadKey] = useState(0); // incremented to retry
+  const [copiedToast, setCopiedToast] = useState(false);
   // Optimistic local counts — initialised from sheet prop, updated instantly on interaction.
   const [localViews, setLocalViews] = useState(sheet?.views ?? 0);
   const [localDownloads, setLocalDownloads] = useState(sheet?.downloads ?? 0);
@@ -180,8 +183,20 @@ const FullPreviewPage: React.FC<FullPreviewPageProps> = ({
     setPdfDoc(null);
     setNumPages(0);
     setIsInitialLoading(true);
+    setPdfError(null);
+
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
+    let cancelled = false;
 
     const loadPdf = async () => {
+      // 15-second timeout: if PDF hasn't loaded by then, show error state
+      timeoutId = setTimeout(() => {
+        if (!cancelled) {
+          setPdfError('Failed to load PDF. Please try again.');
+          setIsInitialLoading(false);
+        }
+      }, 15000);
+
       try {
         const pdfjsLib = (window as any).pdfjsLib;
         if (!pdfjsLib) throw new Error('PDF.js not loaded');
@@ -200,17 +215,26 @@ const FullPreviewPage: React.FC<FullPreviewPageProps> = ({
         });
 
         const pdf = await loadingTask.promise;
+        if (cancelled) return;
+        if (timeoutId) clearTimeout(timeoutId);
         setPdfDoc(pdf);
         setNumPages(pdf.numPages);
       } catch (error) {
+        if (cancelled) return;
+        if (timeoutId) clearTimeout(timeoutId);
         console.error('PDF load error:', error);
+        setPdfError('Failed to load PDF. Please try again.');
       } finally {
-        setIsInitialLoading(false);
+        if (!cancelled) setIsInitialLoading(false);
       }
     };
 
     loadPdf();
-  }, [sheet?.id, sheet?.pdfUrl]);
+    return () => {
+      cancelled = true;
+      if (timeoutId) clearTimeout(timeoutId);
+    };
+  }, [sheet?.id, sheet?.pdfUrl, pdfLoadKey]);
 
   const trackInteraction = async (type: 'views' | 'downloads') => {
     if (!sheet) return;
@@ -286,28 +310,21 @@ const FullPreviewPage: React.FC<FullPreviewPageProps> = ({
 
   const handleDownload = () => handleProtectedAction(() => {
     trackInteraction('downloads');
-    window.open(sheet?.pdfUrl, '_blank');
+    const a = document.createElement('a');
+    a.href = sheet?.pdfUrl ?? '';
+    a.download = `${sheet?.title ?? 'sheet'}.pdf`;
+    a.click();
   });
 
-  const handleShare = () => handleProtectedAction(() => {
-    if (navigator.share) {
-      navigator.share({
-        title: sheet?.title,
-        text: `Check out ${sheet?.title} on Sol-fa Sanctuary`,
-        url: window.location.href,
-      }).catch(() => {});
-    } else {
-      navigator.clipboard.writeText(window.location.href);
-      alert('Link copied!');
-    }
-  });
+  const handleShare = () => {
+    navigator.clipboard.writeText(window.location.href).then(() => {
+      setCopiedToast(true);
+      setTimeout(() => setCopiedToast(false), 2000);
+    }).catch(() => {});
+  };
 
   const handlePrint = () => handleProtectedAction(() => {
-    setIsPrinting(true);
-    setTimeout(() => {
-      window.print();
-      setIsPrinting(false);
-    }, 1000);
+    if (sheet?.pdfUrl) window.open(sheet.pdfUrl, '_blank');
   });
 
   if (!sheet) return null;
@@ -320,26 +337,18 @@ const FullPreviewPage: React.FC<FullPreviewPageProps> = ({
 
   return (
     <div className={`fixed inset-0 flex flex-col h-screen overflow-hidden transition-colors duration-300 ${darkMode ? 'bg-slate-950' : 'bg-slate-100'}`}>
-      <style>{`
-        @media print {
-          @page { margin: 0; size: auto; }
-          html, body, #root, #root > div { height: auto !important; min-height: 0 !important; overflow: visible !important; position: static !important; display: block !important; margin: 0 !important; padding: 0 !important; background: white !important; color: black !important; }
-          div.fixed.inset-0 { position: static !important; display: block !important; height: auto !important; width: 100% !important; overflow: visible !important; inset: auto !important; padding: 0 !important; margin: 0 !important; background: transparent !important; }
-          header, .no-print, footer, .hide-on-print { display: none !important; height: 0 !important; width: 0 !important; margin: 0 !important; padding: 0 !important; visibility: hidden !important; }
-          main { padding: 0 !important; margin: 0 !important; width: 100% !important; overflow: visible !important; height: auto !important; position: static !important; display: block !important; }
-          .print-header { display: block !important; text-align: center; font-size: 11pt; font-family: serif; margin: 0 !important; padding: 1cm 0 0.5cm 0 !important; border-bottom: 1px solid #ddd; width: 100%; }
-          .score-page-container { padding: 0 !important; margin: 0 !important; display: block !important; background: transparent !important; border: none !important; box-shadow: none !important; width: 100% !important; }
-          .score-page { box-shadow: none !important; border: none !important; width: 100% !important; margin: 0 !important; padding: 0.5cm 0 !important; display: block !important; page-break-after: always; break-after: page; }
-          .score-page:last-child { page-break-after: avoid; break-after: avoid; }
-          img { max-width: 100% !important; height: auto !important; display: block; margin: 0 auto; image-rendering: high-quality; page-break-inside: avoid; break-inside: avoid; }
-        }
-      `}</style>
+      {/* "Link copied!" toast */}
+      {copiedToast && (
+        <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-[200] px-5 py-2.5 bg-green-500 text-slate-950 font-bold rounded-xl shadow-xl shadow-green-500/30 animate-in fade-in slide-in-from-bottom-2 duration-200">
+          Link copied!
+        </div>
+      )}
 
       <header className={`shrink-0 z-[100] border-b backdrop-blur-xl transition-all ${headerBg} no-print`}>
         <div className="max-w-[1920px] mx-auto px-4 md:px-6 py-1 lg:py-4">
           <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-0.5 md:gap-6">
             <div className="flex items-center gap-4 flex-1 min-w-0">
-              <button onClick={onClose} className={`p-2 rounded-lg transition-colors shrink-0 ${darkMode ? 'bg-slate-800 text-slate-400 hover:text-white' : 'bg-slate-200 text-slate-600 hover:text-slate-900'}`} title="Back to Sanctuary"><X size={20} /></button>
+              <button onClick={onClose} aria-label="Back to Sanctuary" className={`p-2 rounded-lg transition-colors shrink-0 ${darkMode ? 'bg-slate-800 text-slate-400 hover:text-white' : 'bg-slate-200 text-slate-600 hover:text-slate-900'}`} title="Back to Sanctuary"><X size={20} /></button>
               <div className="flex flex-col min-w-0 flex-1">
                 <h1 className={`text-lg md:text-xl font-serif font-bold leading-tight truncate ${textPrimary}`}>{sheet.title}</h1>
                 <p className="text-green-500 font-medium text-xs truncate">{sheet.composer}</p>
@@ -360,13 +369,13 @@ const FullPreviewPage: React.FC<FullPreviewPageProps> = ({
                 <div className="lg:hidden flex items-center gap-1.5 text-[10px] min-w-0"><Download size={14} className="text-green-500 shrink-0" /><span className={`font-bold truncate ${textPrimary}`}>{localDownloads}</span></div>
               </div>
               <div className="flex items-center gap-2 md:gap-3 w-full lg:w-auto">
-                <button onClick={onThemeToggle} className={`p-2.5 rounded-xl border transition-colors shrink-0 ${darkMode ? 'border-slate-800 text-slate-400 hover:text-white hover:bg-slate-900' : 'border-slate-200 text-slate-500 hover:text-slate-900 hover:bg-slate-50'}`} title="Toggle Theme">{darkMode ? <Sun size={18} /> : <Moon size={18} />}</button>
+                <button onClick={onThemeToggle} aria-label={darkMode ? 'Switch to light mode' : 'Switch to dark mode'} className={`p-2.5 rounded-xl border transition-colors shrink-0 ${darkMode ? 'border-slate-800 text-slate-400 hover:text-white hover:bg-slate-900' : 'border-slate-200 text-slate-500 hover:text-slate-900 hover:bg-slate-50'}`} title="Toggle Theme">{darkMode ? <Sun size={18} /> : <Moon size={18} />}</button>
                 <div className="h-8 w-px bg-slate-700/50 mx-1 hidden lg:block"></div>
                 <div className="flex items-center gap-1.5 md:gap-2 flex-1 lg:flex-none">
-                  <button onClick={handleOpenNewTab} className={`p-2.5 rounded-xl border transition-colors shrink-0 ${darkMode ? 'border-slate-800 text-slate-400 hover:text-white hover:bg-slate-900' : 'border-slate-200 text-slate-500 hover:text-slate-900 hover:bg-slate-50 shadow-sm'}`} title="Open in new tab"><ExternalLink size={18} /></button>
-                  <button onClick={handleShare} className={`p-2.5 rounded-xl border transition-colors shrink-0 ${darkMode ? 'border-slate-800 text-slate-400 hover:text-white hover:bg-slate-900' : 'border-slate-200 text-slate-500 hover:text-slate-900 hover:bg-slate-50 shadow-sm'}`} title="Share"><Share2 size={18} /></button>
-                  <button onClick={handlePrint} className={`p-2.5 rounded-xl border transition-colors shrink-0 ${darkMode ? 'border-slate-800 text-slate-400 hover:text-white hover:bg-slate-900' : 'border-slate-200 text-slate-500 hover:text-slate-900 hover:bg-slate-50 shadow-sm'}`} title="Print"><Printer size={18} /></button>
-                  <button onClick={handleDownload} className="flex-1 lg:flex-none px-4 md:px-6 py-2.5 bg-green-500 hover:bg-green-600 text-slate-950 font-bold rounded-xl transition-all shadow-lg shadow-green-500/10 flex items-center justify-center gap-2 active:scale-95 text-sm md:text-base"><Download size={18} /><span>Download PDF</span></button>
+                  <button onClick={handleOpenNewTab} aria-label="Open in new tab" className={`p-2.5 rounded-xl border transition-colors shrink-0 ${darkMode ? 'border-slate-800 text-slate-400 hover:text-white hover:bg-slate-900' : 'border-slate-200 text-slate-500 hover:text-slate-900 hover:bg-slate-50 shadow-sm'}`} title="Open in new tab"><ExternalLink size={18} /></button>
+                  <button onClick={handleShare} aria-label="Share sheet" className={`p-2.5 rounded-xl border transition-colors shrink-0 ${darkMode ? 'border-slate-800 text-slate-400 hover:text-white hover:bg-slate-900' : 'border-slate-200 text-slate-500 hover:text-slate-900 hover:bg-slate-50 shadow-sm'}`} title="Share"><Share2 size={18} /></button>
+                  <button onClick={handlePrint} aria-label="Print sheet" className={`p-2.5 rounded-xl border transition-colors shrink-0 ${darkMode ? 'border-slate-800 text-slate-400 hover:text-white hover:bg-slate-900' : 'border-slate-200 text-slate-500 hover:text-slate-900 hover:bg-slate-50 shadow-sm'}`} title="Open PDF for printing"><Printer size={18} /></button>
+                  <button onClick={handleDownload} aria-label="Download PDF" className="flex-1 lg:flex-none px-4 md:px-6 py-2.5 bg-green-500 hover:bg-green-600 text-slate-950 font-bold rounded-xl transition-all shadow-lg shadow-green-500/10 flex items-center justify-center gap-2 active:scale-95 text-sm md:text-base"><Download size={18} /><span>Download PDF</span></button>
                 </div>
               </div>
             </div>
@@ -382,6 +391,17 @@ const FullPreviewPage: React.FC<FullPreviewPageProps> = ({
               <div className="absolute inset-0 flex flex-col items-center justify-center space-y-4 no-print">
                 <Loader2 className="animate-spin text-green-500" size={48} />
                 <p className={`text-sm font-medium animate-pulse ${textSecondary}`}>Opening the score…</p>
+              </div>
+            ) : pdfError ? (
+              <div className="absolute inset-0 flex flex-col items-center justify-center space-y-4 no-print">
+                <AlertCircle className="text-red-500" size={48} />
+                <p className={`text-sm font-medium ${textSecondary}`}>{pdfError}</p>
+                <button
+                  onClick={() => { setPdfError(null); setIsInitialLoading(true); setPdfLoadKey(k => k + 1); }}
+                  className="px-6 py-2.5 bg-green-500 hover:bg-green-600 text-slate-950 font-bold rounded-xl transition-all active:scale-95"
+                >
+                  Retry
+                </button>
               </div>
             ) : (
               <div className="flex flex-col gap-4 p-2 md:p-4 bg-slate-200/5">
