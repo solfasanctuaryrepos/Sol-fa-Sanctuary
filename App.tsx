@@ -243,12 +243,14 @@ const App: React.FC = () => {
         );
       case 'dashboard':
         return currentUser ? (
-          <Dashboard 
-            onUploadClick={() => setIsUploadModalOpen(true)} 
-            onPreview={handlePreview} 
+          <Dashboard
+            onUploadClick={() => setIsUploadModalOpen(true)}
+            onPreview={handlePreview}
             darkMode={darkMode}
             sheets={sheets}
             userEmail={currentUser.email}
+            onSheetDeleted={(id) => setSheets(prev => prev.filter(s => s.id !== id))}
+            onSheetUpdated={(sheet) => setSheets(prev => prev.map(s => s.id === sheet.id ? sheet : s))}
           />
         ) : null;
       case 'library':
@@ -260,6 +262,8 @@ const App: React.FC = () => {
             darkMode={darkMode}
             sheets={sheets}
             onRefresh={fetchSheets}
+            onSheetDeleted={(id) => setSheets(prev => prev.filter(s => s.id !== id))}
+            onSheetUpdated={(sheet) => setSheets(prev => prev.map(s => s.id === sheet.id ? sheet : s))}
           />
         ) : null;
       case 'about':

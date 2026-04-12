@@ -10,11 +10,15 @@ interface DashboardProps {
   darkMode: boolean;
   sheets: MusicSheet[];
   userEmail: string;
+  /** Called immediately after a successful delete so the item disappears without waiting for realtime. */
+  onSheetDeleted: (id: string) => void;
+  /** Called with the new sheet object after an update so the item reflects changes without waiting for realtime. */
+  onSheetUpdated: (updated: MusicSheet) => void;
 }
 
 type SortConfig = { key: keyof MusicSheet; direction: 'asc' | 'desc' } | null;
 
-const Dashboard: React.FC<DashboardProps> = ({ onUploadClick, onPreview, darkMode, sheets, userEmail }) => {
+const Dashboard: React.FC<DashboardProps> = ({ onUploadClick, onPreview, darkMode, sheets, userEmail, onSheetDeleted, onSheetUpdated }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [viewMode, setViewMode] = useState<'list' | 'grid'>('grid');
   const [sortConfig, setSortConfig] = useState<SortConfig>(null);
@@ -85,15 +89,12 @@ const Dashboard: React.FC<DashboardProps> = ({ onUploadClick, onPreview, darkMod
 
   const executeDeletion = async () => {
     if (!deleteConfirmation) return;
-    
+    const { id } = deleteConfirmation;
+    setDeleteConfirmation(null); // close modal immediately — no waiting
     try {
-      const { error } = await db
-        .from('sheets')
-        .delete()
-        .eq('id', deleteConfirmation.id);
-        
+      const { error } = await db.from('sheets').delete().eq('id', id);
       if (error) throw error;
-      setDeleteConfirmation(null);
+      onSheetDeleted(id); // remove from list right after network confirms
     } catch (error: any) {
       console.error("Deletion error:", error);
       alert(`Failed to delete: ${error.message || 'Unknown error'}`);
@@ -107,6 +108,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onUploadClick, onPreview, darkMod
 
   const toggleVisibility = async (e: React.MouseEvent, sheet: MusicSheet) => {
     e.stopPropagation();
+    onSheetUpdated({ ...sheet, isPublic: !sheet.isPublic }); // optimistic flip
     try {
       const { error } = await db
         .from('sheets')
@@ -114,11 +116,15 @@ const Dashboard: React.FC<DashboardProps> = ({ onUploadClick, onPreview, darkMod
         .eq('id', sheet.id);
       if (error) throw error;
     } catch (error) {
+      onSheetUpdated(sheet); // rollback on failure
       console.error("Visibility update error:", error);
     }
   };
 
   const handleUpdateSheet = async (updatedSheet: MusicSheet) => {
+    const original = userSheets.find(s => s.id === updatedSheet.id) ?? null;
+    setEditingSheet(null);       // close modal immediately
+    onSheetUpdated(updatedSheet); // apply changes optimistically
     try {
       const { id, ...data } = updatedSheet;
       const { error } = await db
@@ -130,10 +136,9 @@ const Dashboard: React.FC<DashboardProps> = ({ onUploadClick, onPreview, darkMod
           is_public: data.isPublic
         })
         .eq('id', id);
-      
       if (error) throw error;
-      setEditingSheet(null);
     } catch (error) {
+      if (original) onSheetUpdated(original); // rollback on failure
       console.error("Update error:", error);
       alert("Failed to save changes.");
     }

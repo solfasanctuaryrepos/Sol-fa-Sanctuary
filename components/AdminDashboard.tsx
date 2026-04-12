@@ -9,11 +9,15 @@ interface AdminDashboardProps {
   darkMode: boolean;
   sheets: MusicSheet[];
   onRefresh: () => void;
+  /** Called with the new sheet object so the list reflects changes without waiting for realtime. */
+  onSheetUpdated?: (updated: MusicSheet) => void;
+  /** Called with the deleted sheet's id so the list is pruned without waiting for realtime. */
+  onSheetDeleted?: (id: string) => void;
 }
 
 type SortConfig = { key: string; direction: 'asc' | 'desc' } | null;
 
-const AdminDashboard: React.FC<AdminDashboardProps> = ({ onPreview, darkMode, sheets, onRefresh }) => {
+const AdminDashboard: React.FC<AdminDashboardProps> = ({ onPreview, darkMode, sheets, onRefresh, onSheetUpdated, onSheetDeleted }) => {
   const [activeTab, setActiveTab] = useState<AdminTab>('content');
   const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
   const [searchTerm, setSearchTerm] = useState('');
@@ -108,6 +112,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onPreview, darkMode, sh
   const toggleAdminRestriction = async (e: React.MouseEvent, sheet: MusicSheet) => {
     e.preventDefault();
     e.stopPropagation();
+    onSheetUpdated?.({ ...sheet, isAdminRestricted: !sheet.isAdminRestricted }); // optimistic flip
     try {
       const { error } = await db
         .from('sheets')
@@ -115,8 +120,9 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onPreview, darkMode, sh
         .eq('id', sheet.id);
 
       if (error) throw error;
-      onRefresh();
+      // no more onRefresh() — optimistic update already applied above
     } catch (error: any) {
+      onSheetUpdated?.(sheet); // rollback on failure
       console.error("Restriction error:", error);
       alert(`Failed to update restriction status: ${error.message || 'Unknown error'}`);
     }
@@ -127,15 +133,18 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onPreview, darkMode, sh
       alert("This is the primary admin account and its role cannot be changed.");
       return;
     }
+    const newRole = user.role === 'admin' ? 'user' : 'admin';
+    setUsers(prev => prev.map(u => u.id === user.id ? { ...u, role: newRole } : u)); // optimistic
     try {
       const { error } = await db
         .from('profiles')
-        .update({ role: user.role === 'admin' ? 'user' : 'admin' })
+        .update({ role: newRole })
         .eq('id', user.id);
 
       if (error) throw error;
-      fetchUsers();
+      // no more fetchUsers() — optimistic update already applied above
     } catch (error: any) {
+      setUsers(prev => prev.map(u => u.id === user.id ? { ...u, role: user.role } : u)); // rollback
       alert("Failed to update user role.");
     }
   };
@@ -145,15 +154,18 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onPreview, darkMode, sh
       alert("This is the primary admin account and its status cannot be changed.");
       return;
     }
+    const newStatus = user.status === 'Active' ? 'Inactive' : 'Active';
+    setUsers(prev => prev.map(u => u.id === user.id ? { ...u, status: newStatus } : u)); // optimistic
     try {
       const { error } = await db
         .from('profiles')
-        .update({ status: user.status === 'Active' ? 'Inactive' : 'Active' })
+        .update({ status: newStatus })
         .eq('id', user.id);
 
       if (error) throw error;
-      fetchUsers();
+      // no more fetchUsers() — optimistic update already applied above
     } catch (error: any) {
+      setUsers(prev => prev.map(u => u.id === user.id ? { ...u, status: user.status } : u)); // rollback
       alert("Failed to update user status.");
     }
   };
@@ -184,24 +196,29 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onPreview, darkMode, sh
 
   const executeDeletion = async () => {
     if (!deleteConfirmation) return;
+    const { id, type } = deleteConfirmation;
+    setDeleteConfirmation(null); // close modal immediately
+
+    // Optimistic removal — remove from local state before the network call
+    if (type === 'sheet') {
+      onSheetDeleted?.(id);
+    } else {
+      setUsers(prev => prev.filter(u => u.id !== id));
+    }
 
     try {
-      const tableName = deleteConfirmation.type === 'sheet' ? 'sheets' : 'profiles';
-      const { error } = await db
-        .from(tableName)
-        .delete()
-        .eq('id', deleteConfirmation.id);
-
+      const tableName = type === 'sheet' ? 'sheets' : 'profiles';
+      const { error } = await db.from(tableName).delete().eq('id', id);
       if (error) throw error;
-      setDeleteConfirmation(null);
-      if (deleteConfirmation.type === 'sheet') {
-        onRefresh();
-      } else {
-        fetchUsers();
-      }
     } catch (error: any) {
       console.error("Deletion error:", error);
       alert(`Failed to delete: ${error.message || 'Unknown error'}`);
+      // Restore on failure
+      if (type === 'sheet') {
+        onRefresh(); // re-fetch sheets to restore the removed item
+      } else {
+        fetchUsers(); // re-fetch users to restore the removed item
+      }
     }
   };
 
