@@ -22,9 +22,10 @@ const App: React.FC = () => {
   const [sheets, setSheets] = useState<MusicSheet[]>([]);
   
   const [currentUser, setCurrentUser] = useState<{ email: string; role: 'admin' | 'user'; emailVerified: boolean } | null>(null);
-  // Gate that opens after INITIAL_SESSION fires — prevents fetchSheets from running
-  // before auth state is known (fixes blank sheets + broken login with stale tokens)
-  const [sessionInitialized, setSessionInitialized] = useState(false);
+  // Incremented whenever auth resolves (INITIAL_SESSION, SIGNED_OUT after failed refresh).
+  // Adding this to fetchSheets deps ensures sheets always reload after auth state settles,
+  // even when currentUser stays null (stale token → 401 → SIGNED_OUT → re-fetch as anon).
+  const [authVersion, setAuthVersion] = useState(0);
 
 
   // Deep linking logic: Check for sheet ID in URL on mount
@@ -105,12 +106,6 @@ const App: React.FC = () => {
   }, [currentView, currentUser]);
 
   useEffect(() => {
-    // Don't fetch until we know whether the user is logged in or not.
-    // INITIAL_SESSION fires once on startup and sets sessionInitialized = true.
-    // This prevents a race where fetchSheets runs with a stale/revoked token
-    // and the client gets stuck, leaving sheets blank and blocking re-login.
-    if (!sessionInitialized) return;
-
     fetchSheets();
     const channel = supabase
       .channel('public:sheets')
@@ -122,7 +117,7 @@ const App: React.FC = () => {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [fetchSheets, sessionInitialized]);
+  }, [fetchSheets, authVersion]);
 
   // Helper to set user from a Supabase user object
   const setUserFromSession = async (user: any) => {
@@ -158,13 +153,19 @@ const App: React.FC = () => {
     const { data: { subscription } } = auth.onAuthStateChange(async (event, session) => {
       if (event === 'INITIAL_SESSION') {
         await setUserFromSession(session?.user ?? null);
-        // Unlock data fetching now that auth state is known
-        setSessionInitialized(true);
+        // Bump authVersion so fetchSheets re-runs after auth resolves.
+        // This handles the stale-token case: SDK fires INITIAL_SESSION with null
+        // after a failed refresh, but currentUser was already null so fetchSheets
+        // wouldn't re-run without this explicit nudge.
+        setAuthVersion(v => v + 1);
       } else if (event === 'SIGNED_IN') {
         setIsAuthModalOpen(false);
         await setUserFromSession(session?.user ?? null);
       } else if (event === 'SIGNED_OUT') {
         setCurrentUser(null);
+        // Re-fetch as anonymous so public sheets appear after logout or after a
+        // failed token refresh that triggered an automatic sign-out.
+        setAuthVersion(v => v + 1);
       }
     });
     return () => subscription.unsubscribe();
@@ -176,10 +177,7 @@ const App: React.FC = () => {
   };
 
   const handleLogout = () => {
-    // Use scope:'local' — clears localStorage immediately without a network call or
-    // Web Lock. This guarantees the stale token is removed even if the network is
-    // slow or the global signOut hangs, which was causing re-login to break.
-    auth.signOut({ scope: 'local' }).catch(err => console.error("Supabase signout issue:", err));
+    auth.signOut().catch(err => console.error("Supabase signout issue:", err));
 
     // Instantly update local UI state
     setCurrentUser(null);
