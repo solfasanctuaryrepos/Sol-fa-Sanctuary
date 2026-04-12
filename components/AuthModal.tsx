@@ -1,6 +1,6 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { X, Mail, Lock, User as UserIcon, LogIn, UserPlus, AlertCircle, CheckCircle, ArrowLeft } from 'lucide-react';
-import { auth, db, supabase } from '../supabase';
+import { auth, db } from '../supabase';
 
 interface AuthModalProps {
   isOpen: boolean;
@@ -8,8 +8,10 @@ interface AuthModalProps {
   darkMode: boolean;
 }
 
+type Mode = 'signin' | 'signup' | 'reset';
+
 const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, darkMode }) => {
-  const [mode, setMode] = useState<'signin' | 'signup' | 'reset'>('signin');
+  const [mode, setMode] = useState<Mode>('signin');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [displayName, setDisplayName] = useState('');
@@ -18,147 +20,127 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, darkMode }) => {
   const [loading, setLoading] = useState(false);
   const overlayRef = useRef<HTMLDivElement>(null);
 
-  React.useEffect(() => {
+  // Reset form state whenever the modal opens
+  useEffect(() => {
     if (isOpen) {
-      setLoading(false);
+      setMode('signin');
+      setEmail('');
+      setPassword('');
+      setDisplayName('');
       setError(null);
       setSuccessMsg(null);
+      setLoading(false);
     }
   }, [isOpen]);
 
   if (!isOpen) return null;
 
-  const handleOverlayClick = (e: React.MouseEvent) => {
-    if (e.target === overlayRef.current && !loading) {
-      onClose();
-    }
-  };
+  const reset = () => { setError(null); setSuccessMsg(null); };
 
-  const saveUserProfile = async (user: any, name?: string) => {
-    const { error } = await db
-      .from('profiles')
-      .upsert({
-        id: user.id,
-        email: user.email,
-        display_name: name || user.user_metadata?.display_name || '',
-        role: user.email === 'solfasanctuary@gmail.com' ? 'admin' : 'user',
-      });
-    
-    if (error) console.error("Error saving profile:", error);
+  const handleOverlayClick = (e: React.MouseEvent) => {
+    if (e.target === overlayRef.current && !loading) onClose();
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError(null);
-    setSuccessMsg(null);
+    reset();
     setLoading(true);
 
     try {
       if (mode === 'signup') {
-        const { data, error: signUpError } = await auth.signUp({
+        const { data, error: err } = await auth.signUp({
           email,
           password,
-          options: {
-            data: {
-              display_name: displayName,
-            }
-          }
+          options: { data: { display_name: displayName } },
         });
-
-        if (signUpError) throw signUpError;
-        
+        if (err) throw err;
         if (data.user) {
-          // Ensure profile exists with display name
-          await saveUserProfile(data.user, displayName);
-          setSuccessMsg("Account created! A verification email has been sent to " + email + ". Please verify your email before uploading music.");
+          // Persist profile row
+          await db.from('profiles').upsert({
+            id: data.user.id,
+            email: data.user.email,
+            display_name: displayName,
+            role: data.user.email === 'solfasanctuary@gmail.com' ? 'admin' : 'user',
+          });
+          setSuccessMsg(`Account created! Check ${email} for a verification link.`);
         }
       } else if (mode === 'signin') {
-        const { error: signInError } = await auth.signInWithPassword({
-          email,
-          password,
-        });
-        if (signInError) throw signInError;
-        // The onAuthStateChange listener in App.tsx will handle closing this modal
+        const { error: err } = await auth.signInWithPassword({ email, password });
+        if (err) throw err;
+        // onAuthStateChange in App.tsx closes the modal via SIGNED_IN event
       } else if (mode === 'reset') {
-        const { error: resetError } = await auth.resetPasswordForEmail(email);
-        if (resetError) throw resetError;
-        setSuccessMsg("If an account exists for " + email + ", a password reset link has been sent.");
-      }
-      if (mode !== 'signup' && mode !== 'reset') {
-        setEmail('');
-        setPassword('');
-        setDisplayName('');
+        const { error: err } = await auth.resetPasswordForEmail(email);
+        if (err) throw err;
+        setSuccessMsg(`If ${email} has an account, a reset link has been sent.`);
       }
     } catch (err: any) {
-      setError(err.message || "An error occurred during authentication.");
+      setError(err.message ?? 'An error occurred. Please try again.');
     } finally {
       setLoading(false);
     }
   };
 
   const handleGoogleSignIn = async () => {
-    setError(null);
+    reset();
     setLoading(true);
     try {
-      const { error } = await auth.signInWithOAuth({
+      const { error: err } = await auth.signInWithOAuth({
         provider: 'google',
-        options: {
-          redirectTo: window.location.origin
-        }
+        options: { redirectTo: window.location.origin },
       });
-      if (error) throw error;
-      // Note: Redirect happens, App.tsx will pick up the session
+      if (err) throw err;
     } catch (err: any) {
       setError(err.message);
       setLoading(false);
     }
   };
 
-  const bgClass = darkMode ? 'bg-[#0f172a] border-slate-800' : 'bg-white border-slate-200 shadow-2xl';
+  const bg = darkMode ? 'bg-[#0f172a] border-slate-800' : 'bg-white border-slate-200 shadow-2xl';
   const textPrimary = darkMode ? 'text-slate-100' : 'text-slate-900';
   const textSecondary = darkMode ? 'text-slate-400' : 'text-slate-600';
   const inputBg = darkMode ? 'bg-slate-950 border-slate-800' : 'bg-slate-50 border-slate-200';
+  const inputText = darkMode ? 'text-slate-200' : 'text-slate-800';
+  const divider = darkMode ? 'bg-slate-800' : 'bg-slate-100';
+
+  const modeIcon = mode === 'signin' ? <LogIn className="text-green-500" size={32} /> :
+                   mode === 'signup' ? <UserPlus className="text-green-500" size={32} /> :
+                                      <Lock className="text-green-500" size={32} />;
+  const modeTitle = mode === 'signin' ? 'Welcome Back' : mode === 'signup' ? 'Create Account' : 'Reset Password';
+  const modeSub = mode === 'signin' ? 'Sign in to your music sanctuary.' :
+                  mode === 'signup' ? 'Join our community of sol-fa musicians.' :
+                                     'Enter your email for a reset link.';
 
   return (
-    <div 
+    <div
       ref={overlayRef}
       onClick={handleOverlayClick}
       className="fixed inset-0 z-[110] flex items-center justify-center px-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-300"
     >
-      <div className={`w-full max-w-md rounded-3xl overflow-hidden border animate-in zoom-in-95 duration-300 ${bgClass}`}>
+      <div className={`w-full max-w-md rounded-3xl overflow-hidden border animate-in zoom-in-95 duration-300 ${bg}`}>
         <div className="relative p-8">
-          <button 
-            onClick={onClose} 
-            className="absolute top-6 right-6 text-slate-400 hover:text-green-500 transition-colors"
-          >
+          <button onClick={onClose} className="absolute top-6 right-6 text-slate-400 hover:text-green-500 transition-colors">
             <X size={20} />
           </button>
 
+          {/* Header */}
           <div className="text-center mb-8">
             <div className={`w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4 border ${darkMode ? 'bg-green-500/10 border-green-500/20' : 'bg-green-50 border-green-100'}`}>
-              {mode === 'signin' ? <LogIn className="text-green-500" size={32} /> : mode === 'signup' ? <UserPlus className="text-green-500" size={32} /> : <Lock className="text-green-500" size={32} />}
+              {modeIcon}
             </div>
-            <h2 className={`text-3xl font-serif font-bold ${textPrimary}`}>
-              {mode === 'signin' ? 'Welcome Back' : mode === 'signup' ? 'Create Account' : 'Reset Password'}
-            </h2>
-            <p className={`mt-2 ${textSecondary}`}>
-              {mode === 'signin' 
-                ? 'Sign in to access your music sanctuary.' 
-                : mode === 'signup' 
-                ? 'Join our community of sol-fa musicians.'
-                : 'Enter your email to receive a reset link.'}
-            </p>
+            <h2 className={`text-3xl font-serif font-bold ${textPrimary}`}>{modeTitle}</h2>
+            <p className={`mt-2 ${textSecondary}`}>{modeSub}</p>
             {mode === 'signin' && (
               <div className="mt-4 p-3 rounded-lg bg-blue-500/10 border border-blue-500/20 text-blue-400 text-[10px] leading-relaxed italic">
-                Tip: Since we've moved to a new system, you'll need to <strong>Sign Up</strong> for a new account if you haven't already.
+                Tip: If you haven't registered yet, use <strong>Sign Up</strong> to create a new account.
               </div>
             )}
           </div>
 
           <div className="space-y-4">
+            {/* Google button */}
             {mode !== 'reset' && (
               <>
-                <button 
+                <button
                   onClick={handleGoogleSignIn}
                   disabled={loading}
                   className={`w-full flex items-center justify-center gap-3 py-3 rounded-xl border font-bold transition-all active:scale-95 disabled:opacity-50 ${darkMode ? 'bg-slate-900 border-slate-800 text-slate-100 hover:bg-slate-800' : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50 shadow-sm'}`}
@@ -171,42 +153,40 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, darkMode }) => {
                   </svg>
                   Continue with Google
                 </button>
-
                 <div className="relative py-2 flex items-center justify-center">
-                  <div className={`flex-1 h-px ${darkMode ? 'bg-slate-800' : 'bg-slate-100'}`}></div>
+                  <div className={`flex-1 h-px ${divider}`}></div>
                   <span className={`px-4 text-[10px] font-bold uppercase tracking-widest ${textSecondary}`}>Or continue with email</span>
-                  <div className={`flex-1 h-px ${darkMode ? 'bg-slate-800' : 'bg-slate-100'}`}></div>
+                  <div className={`flex-1 h-px ${divider}`}></div>
                 </div>
               </>
             )}
 
+            {/* Alerts */}
             {error && (
               <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-500 text-sm flex items-start gap-2 animate-in slide-in-from-top-1 duration-200">
-                <AlertCircle size={16} className="shrink-0 mt-0.5" />
-                <span>{error}</span>
+                <AlertCircle size={16} className="shrink-0 mt-0.5" /><span>{error}</span>
               </div>
             )}
-
             {successMsg && (
               <div className="p-3 rounded-lg bg-green-500/10 border border-green-500/20 text-green-500 text-sm flex items-start gap-2 animate-in slide-in-from-top-1 duration-200">
-                <CheckCircle size={16} className="shrink-0 mt-0.5" />
-                <span>{successMsg}</span>
+                <CheckCircle size={16} className="shrink-0 mt-0.5" /><span>{successMsg}</span>
               </div>
             )}
 
+            {/* Form */}
             <form className="space-y-4" onSubmit={handleSubmit}>
               {mode === 'signup' && (
                 <div className="space-y-1.5">
                   <label className="text-xs font-bold text-slate-500 uppercase tracking-wider ml-1">Display Name</label>
                   <div className="relative">
                     <UserIcon className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-                    <input 
-                      type="text" 
+                    <input
+                      type="text"
                       value={displayName}
-                      onChange={(e) => setDisplayName(e.target.value)}
+                      onChange={e => setDisplayName(e.target.value)}
                       placeholder="Enter your name"
-                      className={`w-full rounded-xl pl-10 pr-4 py-3 focus:outline-none focus:ring-2 focus:ring-green-500/20 focus:border-green-500 transition-all ${inputBg} ${darkMode ? 'text-slate-200' : 'text-slate-800'}`}
-                      required={mode === 'signup'}
+                      className={`w-full rounded-xl pl-10 pr-4 py-3 border focus:outline-none focus:ring-2 focus:ring-green-500/20 focus:border-green-500 transition-all ${inputBg} ${inputText}`}
+                      required
                     />
                   </div>
                 </div>
@@ -216,12 +196,12 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, darkMode }) => {
                 <label className="text-xs font-bold text-slate-500 uppercase tracking-wider ml-1">Email Address</label>
                 <div className="relative">
                   <Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-                  <input 
-                    type="email" 
+                  <input
+                    type="email"
                     value={email}
-                    onChange={(e) => setEmail(e.target.value)}
+                    onChange={e => setEmail(e.target.value)}
                     placeholder="name@example.com"
-                    className={`w-full rounded-xl pl-10 pr-4 py-3 focus:outline-none focus:ring-2 focus:ring-green-500/20 focus:border-green-500 transition-all ${inputBg} ${darkMode ? 'text-slate-200' : 'text-slate-800'}`}
+                    className={`w-full rounded-xl pl-10 pr-4 py-3 border focus:outline-none focus:ring-2 focus:ring-green-500/20 focus:border-green-500 transition-all ${inputBg} ${inputText}`}
                     required
                   />
                 </div>
@@ -232,59 +212,51 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, darkMode }) => {
                   <div className="flex justify-between">
                     <label className="text-xs font-bold text-slate-500 uppercase tracking-wider ml-1">Password</label>
                     {mode === 'signin' && (
-                      <button 
-                        type="button" 
-                        onClick={() => { setMode('reset'); setError(null); setSuccessMsg(null); }}
-                        className="text-xs text-green-500 hover:text-green-600 font-medium"
-                      >
+                      <button type="button" onClick={() => { setMode('reset'); reset(); }} className="text-xs text-green-500 hover:text-green-600 font-medium">
                         Forgot Password?
                       </button>
                     )}
                   </div>
                   <div className="relative">
                     <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-                    <input 
-                      type="password" 
+                    <input
+                      type="password"
                       value={password}
-                      onChange={(e) => setPassword(e.target.value)}
+                      onChange={e => setPassword(e.target.value)}
                       placeholder="••••••••"
-                      className={`w-full rounded-xl pl-10 pr-4 py-3 focus:outline-none focus:ring-2 focus:ring-green-500/20 focus:border-green-500 transition-all ${inputBg} ${darkMode ? 'text-slate-200' : 'text-slate-800'}`}
+                      className={`w-full rounded-xl pl-10 pr-4 py-3 border focus:outline-none focus:ring-2 focus:ring-green-500/20 focus:border-green-500 transition-all ${inputBg} ${inputText}`}
                       required
                     />
                   </div>
                 </div>
               )}
 
-              <button 
+              <button
                 type="submit"
                 disabled={loading}
                 className="w-full py-3.5 bg-green-500 hover:bg-green-600 text-white font-bold rounded-xl transition-all shadow-xl shadow-green-500/20 mt-4 active:scale-95 disabled:opacity-50 flex items-center justify-center gap-2"
               >
-                {loading ? 'Processing...' : (mode === 'signin' ? 'Sign In' : mode === 'signup' ? 'Sign Up' : 'Send Reset Link')}
+                {loading ? 'Processing…' : mode === 'signin' ? 'Sign In' : mode === 'signup' ? 'Sign Up' : 'Send Reset Link'}
               </button>
 
               {mode === 'reset' && (
-                <button 
+                <button
                   type="button"
-                  onClick={() => { setMode('signin'); setError(null); setSuccessMsg(null); }}
+                  onClick={() => { setMode('signin'); reset(); }}
                   className={`w-full flex items-center justify-center gap-2 text-sm font-medium transition-colors ${darkMode ? 'text-slate-400 hover:text-slate-200' : 'text-slate-500 hover:text-slate-800'}`}
                 >
-                  <ArrowLeft size={16} />
-                  Back to Sign In
+                  <ArrowLeft size={16} />Back to Sign In
                 </button>
               )}
             </form>
           </div>
 
+          {/* Footer toggle */}
           <div className={`mt-8 text-center border-t pt-6 ${darkMode ? 'border-slate-800' : 'border-slate-100'}`}>
             <p className={`text-sm ${textSecondary}`}>
-              {mode === 'signin' ? "Don't have an account?" : mode === 'signup' ? "Already have an account?" : "Remembered your password?"}{' '}
-              <button 
-                onClick={() => {
-                  setMode(mode === 'signup' ? 'signin' : 'signup');
-                  setError(null);
-                  setSuccessMsg(null);
-                }}
+              {mode === 'signin' ? "Don't have an account?" : mode === 'signup' ? 'Already have an account?' : 'Remembered your password?'}{' '}
+              <button
+                onClick={() => { setMode(mode === 'signup' ? 'signin' : 'signup'); reset(); }}
                 className="text-green-500 hover:text-green-600 font-bold ml-1"
               >
                 {mode === 'signup' ? 'Sign In' : 'Sign Up'}
