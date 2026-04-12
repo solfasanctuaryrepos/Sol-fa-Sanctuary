@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import { X, Upload, FileText, Check, Loader2, AlertCircle, Mail, RefreshCw } from 'lucide-react';
 import { auth, db, storage, supabase } from '../supabase';
 import { MusicSheet } from '../types';
@@ -23,9 +23,45 @@ const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose, darkMode, us
   const [uploadStatus, setUploadStatus] = useState('');
   const [resending, setResending] = useState(false);
   const [resendStatus, setResendStatus] = useState<string | null>(null);
-  
+  const [fileError, setFileError] = useState<string | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
+
   const overlayRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const modalRef = useRef<HTMLDivElement>(null);
+  const previousFocusRef = useRef<HTMLElement | null>(null);
+
+  // Focus trap + restore focus on close
+  useEffect(() => {
+    if (!isOpen) return;
+    previousFocusRef.current = document.activeElement as HTMLElement;
+
+    const focusable = () => modalRef.current?.querySelectorAll<HTMLElement>(
+      'a[href], button:not([disabled]), input, select, textarea'
+    ) ?? [];
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== 'Tab') return;
+      const els = Array.from(focusable());
+      if (els.length === 0) return;
+      const first = els[0];
+      const last = els[els.length - 1];
+      if (e.shiftKey) {
+        if (document.activeElement === first) { e.preventDefault(); last.focus(); }
+      } else {
+        if (document.activeElement === last) { e.preventDefault(); first.focus(); }
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    // Autofocus first focusable element
+    setTimeout(() => focusable()[0]?.focus(), 50);
+
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+      previousFocusRef.current?.focus();
+    };
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
@@ -35,15 +71,48 @@ const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose, darkMode, us
     }
   };
 
+  const validateAndSetFile = (selectedFile: File) => {
+    if (selectedFile.type !== 'application/pdf') {
+      setFileError('Please select a valid PDF file.');
+      setFile(null);
+      return;
+    }
+    if (selectedFile.size > 10 * 1024 * 1024) {
+      setFileError('File is too large. Maximum allowed size is 10 MB.');
+      setFile(null);
+      return;
+    }
+    setFileError(null);
+    setFile(selectedFile);
+  };
+
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
-      const selectedFile = e.target.files[0];
-      if (selectedFile.type === 'application/pdf') {
-        setFile(selectedFile);
-      } else {
-        alert("Please select a valid PDF file.");
-      }
+      validateAndSetFile(e.target.files[0]);
     }
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(true);
+  };
+
+  const handleDragEnter = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+    if (isUploading) return;
+    const droppedFile = e.dataTransfer.files[0];
+    if (droppedFile) validateAndSetFile(droppedFile);
   };
 
   const formatFileSize = (bytes: number) => {
@@ -57,9 +126,9 @@ const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose, darkMode, us
   const handleResendVerification = async () => {
     setResending(true);
     try {
-      const { error } = await auth.resetPasswordForEmail(userEmail); // For simplicity, or use formal verification if enabled in Supabase
+      const { error } = await auth.resend({ type: 'signup', email: userEmail });
       if (error) throw error;
-      setResendStatus("Reset link sent! Please check your inbox (Supabase verification is handled via signup).");
+      setResendStatus("Verification email sent! Please check your inbox.");
     } catch (err: any) {
       setResendStatus("Error sending email: " + err.message);
     } finally {
@@ -218,7 +287,7 @@ const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose, darkMode, us
       onClick={handleOverlayClick}
       className="fixed inset-0 z-[100] flex items-center justify-center px-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200"
     >
-      <div className={`w-full max-w-xl rounded-2xl overflow-hidden border animate-in zoom-in-95 duration-200 ${bgClass}`}>
+      <div ref={modalRef} className={`w-full max-w-xl rounded-2xl overflow-hidden border animate-in zoom-in-95 duration-200 ${bgClass}`}>
         <div className={`flex items-center justify-between p-6 border-b ${darkMode ? 'border-slate-800' : 'border-slate-100'}`}>
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 bg-green-500/10 rounded-full flex items-center justify-center">
@@ -229,7 +298,7 @@ const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose, darkMode, us
               <p className={`text-sm ${textSecondary}`}>Fill out the details below to add a new piece to the sanctuary.</p>
             </div>
           </div>
-          <button onClick={onClose} disabled={isUploading} className="text-slate-400 hover:text-green-500 transition-colors disabled:opacity-50">
+          <button onClick={onClose} disabled={isUploading} aria-label="Close upload modal" className="text-slate-400 hover:text-green-500 transition-colors disabled:opacity-50">
             <X size={20} />
           </button>
         </div>
@@ -311,9 +380,13 @@ const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose, darkMode, us
 
             <div className="space-y-2">
               <label className={`text-sm font-medium ${darkMode ? 'text-slate-300' : 'text-slate-700'}`}>Sheet Music File</label>
-              <div 
+              <div
                 onClick={() => !isUploading && fileInputRef.current?.click()}
-                className={`border-2 border-dashed rounded-lg p-8 flex flex-col items-center justify-center gap-2 hover:border-green-500/50 transition-colors cursor-pointer group ${darkMode ? 'border-slate-800' : 'border-slate-200'} ${file ? 'border-green-500/50 bg-green-500/5' : ''}`}
+                onDragOver={handleDragOver}
+                onDragEnter={handleDragEnter}
+                onDragLeave={handleDragLeave}
+                onDrop={handleDrop}
+                className={`border-2 border-dashed rounded-lg p-8 flex flex-col items-center justify-center gap-2 transition-colors cursor-pointer group ${isDragging ? 'border-green-500 bg-green-500/10' : file ? 'border-green-500/50 bg-green-500/5' : darkMode ? 'border-slate-800 hover:border-green-500/50' : 'border-slate-200 hover:border-green-500/50'}`}
               >
                 <div className={`w-12 h-12 rounded-xl flex items-center justify-center transition-colors ${darkMode ? 'bg-slate-900 group-hover:bg-slate-800' : 'bg-slate-50 group-hover:bg-slate-100'}`}>
                   {file ? <Check className="text-green-500" size={24} /> : <FileText className="text-slate-400" size={24} />}
@@ -326,14 +399,20 @@ const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose, darkMode, us
                 <p className="text-xs text-slate-500">
                   {file ? `${formatFileSize(file.size)} • Ready` : 'Upload a PDF file. Max size 10MB.'}
                 </p>
-                <input 
-                  type="file" 
+                <input
+                  type="file"
                   ref={fileInputRef}
                   onChange={handleFileChange}
                   accept=".pdf"
-                  className="hidden" 
+                  className="hidden"
                 />
               </div>
+              {fileError && (
+                <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-500 text-sm flex items-start gap-2">
+                  <AlertCircle size={16} className="shrink-0 mt-0.5" />
+                  <span>{fileError}</span>
+                </div>
+              )}
             </div>
 
             <div className={`p-4 rounded-xl border flex items-center justify-between ${darkMode ? 'bg-slate-950 border-slate-800' : 'bg-slate-50 border-slate-200 shadow-inner'}`}>

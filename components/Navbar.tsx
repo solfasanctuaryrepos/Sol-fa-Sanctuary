@@ -70,10 +70,11 @@ const Navbar: React.FC<NavbarProps> = ({ activeView, onViewChange, currentUser, 
         </div>
 
         <div className="flex items-center gap-4">
-          <button 
+          <button
             onClick={onThemeToggle}
+            aria-label={darkMode ? 'Switch to light mode' : 'Switch to dark mode'}
             title={darkMode ? "Switch to Light Mode" : "Switch to Dark Mode"}
-            className={`p-2 border rounded-lg transition-colors ${darkMode ? 'text-slate-400 hover:text-slate-100 border-slate-800 hover:bg-slate-900' : 'text-slate-500 hover:text-slate-900 border-slate-200 hover:bg-slate-50'} hidden sm:block`}
+            className={`p-2 border rounded-lg transition-colors ${darkMode ? 'text-slate-400 hover:text-slate-100 border-slate-800 hover:bg-slate-900' : 'text-slate-500 hover:text-slate-900 border-slate-200 hover:bg-slate-50'}`}
           >
             {darkMode ? <Sun size={18} /> : <Moon size={18} />}
           </button>

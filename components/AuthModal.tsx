@@ -19,6 +19,8 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, darkMode }) => {
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const overlayRef = useRef<HTMLDivElement>(null);
+  const modalRef = useRef<HTMLDivElement>(null);
+  const previousFocusRef = useRef<HTMLElement | null>(null);
 
   // Reset form state whenever the modal opens
   useEffect(() => {
@@ -31,6 +33,33 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, darkMode }) => {
       setSuccessMsg(null);
       setLoading(false);
     }
+  }, [isOpen]);
+
+  // Focus trap
+  useEffect(() => {
+    if (!isOpen) return;
+    previousFocusRef.current = document.activeElement as HTMLElement;
+    const focusable = () => modalRef.current?.querySelectorAll<HTMLElement>(
+      'a[href], button:not([disabled]), input, select, textarea'
+    ) ?? [];
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== 'Tab') return;
+      const els = Array.from(focusable());
+      if (els.length === 0) return;
+      const first = els[0];
+      const last = els[els.length - 1];
+      if (e.shiftKey) {
+        if (document.activeElement === first) { e.preventDefault(); last.focus(); }
+      } else {
+        if (document.activeElement === last) { e.preventDefault(); first.focus(); }
+      }
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    setTimeout(() => focusable()[0]?.focus(), 50);
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+      previousFocusRef.current?.focus();
+    };
   }, [isOpen]);
 
   if (!isOpen) return null;
@@ -116,9 +145,9 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, darkMode }) => {
       onClick={handleOverlayClick}
       className="fixed inset-0 z-[110] flex items-center justify-center px-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-300"
     >
-      <div className={`w-full max-w-md rounded-3xl overflow-hidden border animate-in zoom-in-95 duration-300 ${bg}`}>
+      <div ref={modalRef} className={`w-full max-w-md rounded-3xl overflow-hidden border animate-in zoom-in-95 duration-300 ${bg}`}>
         <div className="relative p-8">
-          <button onClick={onClose} className="absolute top-6 right-6 text-slate-400 hover:text-green-500 transition-colors">
+          <button onClick={onClose} aria-label="Close sign in modal" className="absolute top-6 right-6 text-slate-400 hover:text-green-500 transition-colors">
             <X size={20} />
           </button>
 

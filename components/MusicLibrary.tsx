@@ -1,4 +1,4 @@
-import { Search, List, Grid, Eye, Download, Music as MusicIcon, ArrowUp, ArrowDown } from 'lucide-react';
+import { Search, List, Grid, Eye, Download, Music as MusicIcon, ArrowUp, ArrowDown, SearchX } from 'lucide-react';
 import React, { useState, useEffect, useRef, useMemo, memo } from 'react';
 import { MusicSheet } from '../types';
 
@@ -92,7 +92,8 @@ const SheetCard = memo(({ sheet, onPreview, activeMobileMenuId, setActiveMobileM
             Open Sheet
           </button>
           <button
-            onClick={(e) => { e.stopPropagation(); window.open(sheet.pdfUrl, '_blank'); }}
+            onClick={(e) => { e.stopPropagation(); const a = document.createElement('a'); a.href = sheet.pdfUrl; a.download = `${sheet.title}.pdf`; a.click(); }}
+            aria-label={`Download ${sheet.title}`}
             className="w-full py-2.5 bg-green-500 hover:bg-green-600 text-slate-950 text-sm font-bold rounded-xl shadow-lg active:scale-95 transition-all flex items-center justify-center gap-2"
           >
             <Download size={18} />
@@ -115,11 +116,16 @@ const SheetCard = memo(({ sheet, onPreview, activeMobileMenuId, setActiveMobileM
   );
 });
 
+type TypeFilter = 'All' | 'Classical' | 'Liturgical' | 'Choral' | 'Contemporary';
+type SortOption = 'newest' | 'views' | 'downloads' | 'az';
+
 const MusicLibrary: React.FC<MusicLibraryProps> = ({ darkMode, initialSearch = '', onPreview, sheets }) => {
   const [searchTerm, setSearchTerm] = useState(initialSearch);
   const [viewMode, setViewMode] = useState<'list' | 'grid'>('grid');
   const [sortConfig, setSortConfig] = useState<SortConfig>(null);
   const [activeMobileMenuId, setActiveMobileMenuId] = useState<string | null>(null);
+  const [typeFilter, setTypeFilter] = useState<TypeFilter>('All');
+  const [sortOption, setSortOption] = useState<SortOption>('newest');
 
   const [visibleColumns] = useState({
     title: true,
@@ -145,16 +151,39 @@ const MusicLibrary: React.FC<MusicLibraryProps> = ({ darkMode, initialSearch = '
   // Performance Optimization: Memoize filtering and sorting to prevent jank during searching
   const filteredSheets = useMemo(() => {
     const publicSheets = sheets.filter(s => s.isPublic && !s.isAdminRestricted);
-    
-    let result = publicSheets.filter(sheet =>
-      sheet.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      sheet.composer.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      sheet.type.toLowerCase().includes(searchTerm.toLowerCase())
-    );
 
-    if (sortConfig) {
+    let result = publicSheets.filter(sheet => {
+      const matchesSearch =
+        sheet.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        sheet.composer.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        sheet.type.toLowerCase().includes(searchTerm.toLowerCase());
+      const matchesType = typeFilter === 'All' || sheet.type.toLowerCase() === typeFilter.toLowerCase();
+      return matchesSearch && matchesType;
+    });
+
+    // Apply sort option (overrides column sort when set)
+    if (sortOption === 'newest') {
+      // default DB order (already sorted by uploadedAt desc from server) — no-op
+    } else if (sortOption === 'views') {
+      result = [...result].sort((a, b) => b.views - a.views);
+    } else if (sortOption === 'downloads') {
+      result = [...result].sort((a, b) => b.downloads - a.downloads);
+    } else if (sortOption === 'az') {
+      result = [...result].sort((a, b) => a.title.localeCompare(b.title));
+    } else if (sortConfig) {
       const { key, direction } = sortConfig;
-      result.sort((a, b) => {
+      result = [...result].sort((a, b) => {
+        const valA = a[key];
+        const valB = b[key];
+        if (valA < valB) return direction === 'asc' ? -1 : 1;
+        if (valA > valB) return direction === 'asc' ? 1 : -1;
+        return 0;
+      });
+    }
+
+    if (sortOption === 'newest' && sortConfig) {
+      const { key, direction } = sortConfig;
+      result = [...result].sort((a, b) => {
         const valA = a[key];
         const valB = b[key];
         if (valA < valB) return direction === 'asc' ? -1 : 1;
@@ -164,7 +193,7 @@ const MusicLibrary: React.FC<MusicLibraryProps> = ({ darkMode, initialSearch = '
     }
 
     return result;
-  }, [sheets, searchTerm, sortConfig]);
+  }, [sheets, searchTerm, sortConfig, typeFilter, sortOption]);
 
   const textPrimary = darkMode ? 'text-slate-100' : 'text-slate-900';
   const textSecondary = darkMode ? 'text-slate-400' : 'text-slate-600';
@@ -201,16 +230,58 @@ const MusicLibrary: React.FC<MusicLibraryProps> = ({ darkMode, initialSearch = '
         </div>
       </div>
 
+      {/* Type filter pills + Sort dropdown */}
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="flex flex-wrap gap-2">
+          {(['All', 'Classical', 'Liturgical', 'Choral', 'Contemporary'] as TypeFilter[]).map(t => (
+            <button
+              key={t}
+              onClick={() => setTypeFilter(t)}
+              className={`px-3 py-1.5 rounded-full text-xs font-bold border transition-colors ${
+                typeFilter === t
+                  ? 'bg-green-500 text-white border-green-500'
+                  : darkMode
+                    ? 'bg-transparent border-slate-700 text-slate-400 hover:border-slate-500 hover:text-slate-200'
+                    : 'bg-transparent border-slate-200 text-slate-600 hover:border-slate-400 hover:text-slate-900'
+              }`}
+            >
+              {t}
+            </button>
+          ))}
+        </div>
+        <select
+          value={sortOption}
+          onChange={e => setSortOption(e.target.value as SortOption)}
+          className={`ml-auto border rounded-lg px-3 py-1.5 text-xs font-medium focus:outline-none focus:ring-1 focus:ring-green-500 cursor-pointer ${darkMode ? 'bg-slate-900 border-slate-800 text-slate-200' : 'bg-white border-slate-200 text-slate-800 shadow-sm'}`}
+        >
+          <option value="newest">Newest</option>
+          <option value="views">Most Viewed</option>
+          <option value="downloads">Most Downloaded</option>
+          <option value="az">A–Z</option>
+        </select>
+      </div>
+
       {viewMode === 'grid' ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-          {filteredSheets.map(sheet => (
-            <SheetCard 
-              key={sheet.id} 
-              sheet={sheet} 
-              onPreview={onPreview} 
-              activeMobileMenuId={activeMobileMenuId} 
-              setActiveMobileMenuId={setActiveMobileMenuId} 
-              darkMode={darkMode} 
+          {filteredSheets.length === 0 ? (
+            <div className="col-span-full py-20 flex flex-col items-center gap-4 text-slate-500">
+              <SearchX size={48} className="opacity-30" />
+              <p className="text-base">No sheets match your search.</p>
+              <button
+                onClick={() => { setSearchTerm(''); setTypeFilter('All'); }}
+                className={`px-5 py-2 rounded-xl border text-sm font-medium transition-colors ${darkMode ? 'border-slate-700 text-slate-400 hover:text-white' : 'border-slate-200 text-slate-600 hover:text-slate-900'}`}
+              >
+                Clear search
+              </button>
+            </div>
+          ) : filteredSheets.map(sheet => (
+            <SheetCard
+              key={sheet.id}
+              sheet={sheet}
+              onPreview={onPreview}
+              activeMobileMenuId={activeMobileMenuId}
+              setActiveMobileMenuId={setActiveMobileMenuId}
+              darkMode={darkMode}
             />
           ))}
         </div>
@@ -228,7 +299,22 @@ const MusicLibrary: React.FC<MusicLibraryProps> = ({ darkMode, initialSearch = '
                 </tr>
               </thead>
               <tbody className={`divide-y ${darkMode ? 'divide-slate-800' : 'divide-slate-100'}`}>
-                {filteredSheets.map((sheet) => (
+                {filteredSheets.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} className="px-6 py-20">
+                      <div className="flex flex-col items-center gap-4 text-slate-500">
+                        <SearchX size={40} className="opacity-30" />
+                        <p>No sheets match your search.</p>
+                        <button
+                          onClick={() => { setSearchTerm(''); setTypeFilter('All'); }}
+                          className={`px-5 py-2 rounded-xl border text-sm font-medium transition-colors ${darkMode ? 'border-slate-700 text-slate-400 hover:text-white' : 'border-slate-200 text-slate-600 hover:text-slate-900'}`}
+                        >
+                          Clear search
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ) : filteredSheets.map((sheet) => (
                   <tr key={sheet.id} className={`transition-colors ${darkMode ? 'hover:bg-slate-800/30' : 'hover:bg-slate-50'}`}>
                     {visibleColumns.title && (
                       <td className="px-4 md:px-6 py-4">

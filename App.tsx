@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Home, LayoutDashboard, ShieldAlert, Music, Upload, Info, Download, X, Smartphone } from 'lucide-react';
+import { Home, LayoutDashboard, ShieldAlert, Music, Upload, Info, Download, X, Smartphone, LogIn } from 'lucide-react';
 import Navbar from './components/Navbar';
 import LandingPage from './components/LandingPage';
 import Dashboard from './components/Dashboard';
@@ -16,7 +16,7 @@ const App: React.FC = () => {
   const [currentView, setCurrentView] = useState<View>('home');
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
-  const [darkMode, setDarkMode] = useState(true);
+  const [darkMode, setDarkMode] = useState(() => localStorage.getItem('solfa-theme') !== 'light');
   const [searchQuery, setSearchQuery] = useState('');
   const [activePreview, setActivePreview] = useState<MusicSheet | null>(null);
   const [sheets, setSheets] = useState<MusicSheet[]>([]);
@@ -206,6 +206,7 @@ const App: React.FC = () => {
   };
 
   const toggleTheme = () => {
+    localStorage.setItem('solfa-theme', darkMode ? 'light' : 'dark');
     setDarkMode(!darkMode);
   };
 
@@ -314,25 +315,30 @@ const App: React.FC = () => {
 
 
           <div className={`md:hidden fixed bottom-0 left-0 right-0 backdrop-blur-lg border-t p-2 flex justify-around items-center z-50 ${darkMode ? 'bg-slate-950/80 border-slate-800' : 'bg-white/80 border-slate-200 shadow-lg'}`}>
-            <button onClick={() => { setCurrentView('home'); setActivePreview(null); }} className={`p-3 rounded-xl transition-colors ${currentView === 'home' ? 'text-green-500' : darkMode ? 'text-slate-500' : 'text-slate-400'}`}>
+            <button aria-label="Home" onClick={() => { setCurrentView('home'); setActivePreview(null); }} className={`p-3 rounded-xl transition-colors ${currentView === 'home' ? 'text-green-500' : darkMode ? 'text-slate-500' : 'text-slate-400'}`}>
               <Home size={24} />
             </button>
-            <button onClick={() => { setSearchQuery(''); setCurrentView('library'); setActivePreview(null); }} className={`p-3 rounded-xl transition-colors ${currentView === 'library' ? 'text-green-500' : darkMode ? 'text-slate-500' : 'text-slate-400'}`}>
+            <button aria-label="Music Library" onClick={() => { setSearchQuery(''); setCurrentView('library'); setActivePreview(null); }} className={`p-3 rounded-xl transition-colors ${currentView === 'library' ? 'text-green-500' : darkMode ? 'text-slate-500' : 'text-slate-400'}`}>
               <Music size={24} />
             </button>
-            <button onClick={() => { setCurrentView('about'); setActivePreview(null); }} className={`p-3 rounded-xl transition-colors ${currentView === 'about' ? 'text-green-500' : darkMode ? 'text-slate-500' : 'text-slate-400'}`}>
+            <button aria-label="About" onClick={() => { setCurrentView('about'); setActivePreview(null); }} className={`p-3 rounded-xl transition-colors ${currentView === 'about' ? 'text-green-500' : darkMode ? 'text-slate-500' : 'text-slate-400'}`}>
               <Info size={24} />
             </button>
+            {!currentUser && (
+              <button aria-label="Sign In" onClick={handleOpenLogin} className={`p-3 rounded-xl transition-colors ${darkMode ? 'text-slate-500 hover:text-green-500' : 'text-slate-400 hover:text-green-600'}`}>
+                <LogIn size={24} />
+              </button>
+            )}
             {currentUser && (
               <>
-                <button onClick={() => setIsUploadModalOpen(true)} className="p-3 bg-green-500 text-slate-950 rounded-xl shadow-lg shadow-green-500/20 active:scale-95 transition-transform">
+                <button aria-label="Upload music" onClick={() => setIsUploadModalOpen(true)} className="p-3 bg-green-500 text-slate-950 rounded-xl shadow-lg shadow-green-500/20 active:scale-95 transition-transform">
                   <Upload size={24} />
                 </button>
-                <button onClick={() => { setCurrentView('dashboard'); setActivePreview(null); }} className={`p-3 rounded-xl transition-colors ${currentView === 'dashboard' ? 'text-green-500' : darkMode ? 'text-slate-500' : 'text-slate-400'}`}>
+                <button aria-label="Dashboard" onClick={() => { setCurrentView('dashboard'); setActivePreview(null); }} className={`p-3 rounded-xl transition-colors ${currentView === 'dashboard' ? 'text-green-500' : darkMode ? 'text-slate-500' : 'text-slate-400'}`}>
                   <LayoutDashboard size={24} />
                 </button>
                 {currentUser.role === 'admin' && (
-                  <button onClick={() => { setCurrentView('admin'); setActivePreview(null); }} className={`p-3 rounded-xl transition-colors ${currentView === 'admin' ? 'text-green-500' : darkMode ? 'text-slate-500' : 'text-slate-400'}`}>
+                  <button aria-label="Admin dashboard" onClick={() => { setCurrentView('admin'); setActivePreview(null); }} className={`p-3 rounded-xl transition-colors ${currentView === 'admin' ? 'text-green-500' : darkMode ? 'text-slate-500' : 'text-slate-400'}`}>
                     <ShieldAlert size={24} />
                   </button>
                 )}

@@ -23,7 +23,10 @@ const LandingPage: React.FC<LandingPageProps> = ({ onUploadClick, onBrowseClick,
     }
   };
 
-  const publicSheets = sheets.filter(s => s.isPublic && !s.isAdminRestricted).slice(0, 4);
+  const publicSheets = sheets
+    .filter(s => s.isPublic && !s.isAdminRestricted)
+    .sort((a, b) => b.downloads - a.downloads)
+    .slice(0, 4);
 
   const bgCardClass = darkMode ? 'bg-slate-900/50 border-slate-800' : 'bg-white border-slate-200 shadow-sm';
   const textPrimaryClass = darkMode ? 'text-slate-100' : 'text-slate-900';
@@ -104,7 +107,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onUploadClick, onBrowseClick,
       <section className="space-y-16">
         <div className="text-center space-y-5 max-w-3xl mx-auto">
           <p className="text-green-500 font-bold uppercase tracking-[0.35em] text-xs">Top Charts</p>
-          <h2 className={`text-5xl font-serif font-bold ${textPrimaryClass}`}>Most Popular Downloads</h2>
+          <h2 className={`text-5xl font-serif font-bold ${textPrimaryClass}`}>Most Downloaded</h2>
           <p className={`text-lg opacity-70 ${textPrimaryClass}`}>Explore the music sheets that our community is loving right now.</p>
         </div>
 
