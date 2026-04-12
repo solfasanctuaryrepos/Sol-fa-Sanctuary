@@ -338,12 +338,13 @@ const App: React.FC = () => {
         </>
       )}
 
-      <UploadModal 
-        isOpen={isUploadModalOpen} 
-        onClose={() => setIsUploadModalOpen(false)} 
+      <UploadModal
+        isOpen={isUploadModalOpen}
+        onClose={() => setIsUploadModalOpen(false)}
         darkMode={darkMode}
         userEmail={currentUser?.email || ''}
         isVerified={currentUser?.emailVerified || currentUser?.email === 'solfasanctuary@gmail.com'}
+        onSheetUploaded={(sheet) => setSheets(prev => [sheet, ...prev])}
       />
 
       <AuthModal 

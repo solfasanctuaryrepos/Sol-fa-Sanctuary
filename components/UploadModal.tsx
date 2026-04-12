@@ -1,6 +1,7 @@
 import React, { useRef, useState } from 'react';
 import { X, Upload, FileText, Check, Loader2, AlertCircle, Mail, RefreshCw } from 'lucide-react';
 import { auth, db, storage, supabase } from '../supabase';
+import { MusicSheet } from '../types';
 
 interface UploadModalProps {
   isOpen: boolean;
@@ -8,9 +9,11 @@ interface UploadModalProps {
   darkMode: boolean;
   userEmail: string;
   isVerified: boolean;
+  /** Called with the newly inserted sheet so the UI updates instantly. */
+  onSheetUploaded?: (sheet: MusicSheet) => void;
 }
 
-const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose, darkMode, userEmail, isVerified }) => {
+const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose, darkMode, userEmail, isVerified, onSheetUploaded }) => {
   const [file, setFile] = useState<File | null>(null);
   const [title, setTitle] = useState('');
   const [composer, setComposer] = useState('');
@@ -148,7 +151,7 @@ const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose, darkMode, us
         .getPublicUrl(`${userEmail}/${thumbName}`);
 
       setUploadStatus('Finalizing...');
-      const { error: dbError } = await db
+      const { data: insertedRow, error: dbError } = await db
         .from('sheets')
         .insert({
           title,
@@ -160,9 +163,34 @@ const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose, darkMode, us
           pdf_url: pdfUrl,
           uploaded_by: userEmail,
           user_id: (await auth.getUser()).data.user?.id
-        });
+        })
+        .select()
+        .single();
 
       if (dbError) throw dbError;
+
+      // Optimistic UI: push the new sheet into the parent's list immediately
+      // so it appears without waiting for the realtime subscription to re-fetch.
+      if (insertedRow && onSheetUploaded) {
+        const mapped: MusicSheet = {
+          id: insertedRow.id,
+          title: insertedRow.title,
+          composer: insertedRow.composer,
+          type: insertedRow.type,
+          uploadedAt: insertedRow.uploaded_at
+            ? new Date(insertedRow.uploaded_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+            : new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+          fileSize: insertedRow.file_size,
+          views: insertedRow.views ?? 0,
+          downloads: insertedRow.downloads ?? 0,
+          isPublic: insertedRow.is_public,
+          isAdminRestricted: insertedRow.is_admin_restricted ?? false,
+          thumbnailUrl: insertedRow.thumbnail_url,
+          pdfUrl: insertedRow.pdf_url,
+          uploadedBy: insertedRow.uploaded_by,
+        };
+        onSheetUploaded(mapped);
+      }
 
       onClose();
       setFile(null);
