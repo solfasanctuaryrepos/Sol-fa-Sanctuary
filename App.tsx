@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Home, LayoutDashboard, ShieldAlert, Music, Upload, Info, Download, X, Smartphone } from 'lucide-react';
 import Navbar from './components/Navbar';
 import LandingPage from './components/LandingPage';
@@ -22,10 +22,10 @@ const App: React.FC = () => {
   const [sheets, setSheets] = useState<MusicSheet[]>([]);
   
   const [currentUser, setCurrentUser] = useState<{ email: string; role: 'admin' | 'user'; emailVerified: boolean } | null>(null);
-  // Incremented whenever auth resolves (INITIAL_SESSION, SIGNED_OUT after failed refresh).
-  // Adding this to fetchSheets deps ensures sheets always reload after auth state settles,
-  // even when currentUser stays null (stale token → 401 → SIGNED_OUT → re-fetch as anon).
-  const [authVersion, setAuthVersion] = useState(0);
+  // authReady becomes true once we've determined the initial session state.
+  // fetchSheets is suppressed until then so it always runs with the correct user.
+  const [authReady, setAuthReady] = useState(false);
+  const authReadyRef = useRef(false);
 
 
   // Deep linking logic: Check for sheet ID in URL on mount
@@ -106,6 +106,7 @@ const App: React.FC = () => {
   }, [currentView, currentUser]);
 
   useEffect(() => {
+    if (!authReady) return;
     fetchSheets();
     const channel = supabase
       .channel('public:sheets')
@@ -113,77 +114,76 @@ const App: React.FC = () => {
         fetchSheets();
       })
       .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [fetchSheets, authReady]);
 
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [fetchSheets, authVersion]);
-
-  // Helper to set user from a Supabase user object
-  const setUserFromSession = async (user: any) => {
-    if (!user || !user.email) {
-      setCurrentUser(null);
-      return;
-    }
+  // ─── AUTH ────────────────────────────────────────────────────────────────────
+  // Load role from profiles table, fall back to email-based heuristic.
+  const resolveUser = useCallback(async (user: any) => {
+    if (!user?.email) { setCurrentUser(null); return; }
     try {
       const { data: profile } = await db
         .from('profiles')
         .select('role')
         .eq('id', user.id)
         .maybeSingle();
-      const role = profile?.role || (user.email === 'solfasanctuary@gmail.com' ? 'admin' : 'user');
       setCurrentUser({
         email: user.email,
-        role: role as 'admin' | 'user',
-        emailVerified: !!user.email_confirmed_at
+        role: (profile?.role ?? (user.email === 'solfasanctuary@gmail.com' ? 'admin' : 'user')) as 'admin' | 'user',
+        emailVerified: !!user.email_confirmed_at,
       });
     } catch {
       setCurrentUser({
         email: user.email,
         role: user.email === 'solfasanctuary@gmail.com' ? 'admin' : 'user',
-        emailVerified: !!user.email_confirmed_at
+        emailVerified: !!user.email_confirmed_at,
       });
     }
-  };
-
-  // Single auth listener — handles initial session + sign-in/sign-out.
-  // Using INITIAL_SESSION event avoids double getSession() calls in React Strict Mode
-  // which caused Web Lock contention warnings.
-  useEffect(() => {
-    const { data: { subscription } } = auth.onAuthStateChange(async (event, session) => {
-      if (event === 'INITIAL_SESSION') {
-        await setUserFromSession(session?.user ?? null);
-        // Bump authVersion so fetchSheets re-runs after auth resolves.
-        // This handles the stale-token case: SDK fires INITIAL_SESSION with null
-        // after a failed refresh, but currentUser was already null so fetchSheets
-        // wouldn't re-run without this explicit nudge.
-        setAuthVersion(v => v + 1);
-      } else if (event === 'SIGNED_IN') {
-        setIsAuthModalOpen(false);
-        await setUserFromSession(session?.user ?? null);
-      } else if (event === 'SIGNED_OUT') {
-        setCurrentUser(null);
-        // Re-fetch as anonymous so public sheets appear after logout or after a
-        // failed token refresh that triggered an automatic sign-out.
-        setAuthVersion(v => v + 1);
-      }
-    });
-    return () => subscription.unsubscribe();
   }, []);
 
+  useEffect(() => {
+    // getSession() is the single source of truth on mount.
+    // We call it once, set user state, then open the gate for data fetching.
+    // onAuthStateChange handles live updates (sign-in, sign-out) after that.
+    let cancelled = false;
 
-  const handleOpenLogin = () => {
-    setIsAuthModalOpen(true);
-  };
+    auth.getSession().then(({ data: { session } }) => {
+      if (cancelled) return;
+      resolveUser(session?.user ?? null).finally(() => {
+        if (!cancelled) {
+          authReadyRef.current = true;
+          setAuthReady(true);
+        }
+      });
+    });
+
+    const { data: { subscription } } = auth.onAuthStateChange((event, session) => {
+      if (!authReadyRef.current) return; // ignore events before initial session resolves
+      if (event === 'SIGNED_IN') {
+        setIsAuthModalOpen(false);
+        resolveUser(session?.user ?? null);
+      } else if (event === 'SIGNED_OUT') {
+        setCurrentUser(null);
+      } else if (event === 'TOKEN_REFRESHED') {
+        resolveUser(session?.user ?? null);
+      }
+    });
+
+    return () => {
+      cancelled = true;
+      subscription.unsubscribe();
+    };
+  }, [resolveUser]);
+  // ─────────────────────────────────────────────────────────────────────────────
+
+  const handleOpenLogin = () => { setIsAuthModalOpen(true); };
 
   const handleLogout = () => {
-    auth.signOut().catch(err => console.error("Supabase signout issue:", err));
-
-    // Instantly update local UI state
     setCurrentUser(null);
     setCurrentView('home');
     setActivePreview(null);
     setIsAuthModalOpen(false);
+    auth.signOut().catch(() => {});
   };
 
   const toggleTheme = () => {
