@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Download, Share2, Printer, Eye, Calendar, User, FileText, Music as MusicIcon, X, Moon, Sun, ExternalLink, Menu, ChevronUp, Loader2, AlertTriangle } from 'lucide-react';
 import { MusicSheet } from '../types';
-import { auth, db } from '../supabase';
+import { db } from '../supabase';
 
 interface FullPreviewPageProps {
   sheet: MusicSheet | null;
@@ -163,6 +163,15 @@ const FullPreviewPage: React.FC<FullPreviewPageProps> = ({
   const [numPages, setNumPages] = useState(0);
   const [isInitialLoading, setIsInitialLoading] = useState(true);
   const [isPrinting, setIsPrinting] = useState(false);
+  // Optimistic local counts — initialised from sheet prop, updated instantly on interaction.
+  const [localViews, setLocalViews] = useState(sheet?.views ?? 0);
+  const [localDownloads, setLocalDownloads] = useState(sheet?.downloads ?? 0);
+
+  // Sync local counts when a different sheet is opened.
+  useEffect(() => {
+    setLocalViews(sheet?.views ?? 0);
+    setLocalDownloads(sheet?.downloads ?? 0);
+  }, [sheet?.id]);
 
   useEffect(() => {
     if (!sheet) return;
@@ -205,52 +214,58 @@ const FullPreviewPage: React.FC<FullPreviewPageProps> = ({
 
   const trackInteraction = async (type: 'views' | 'downloads') => {
     if (!sheet) return;
-    const { data: { user } } = await auth.getUser();
-    if (user?.email === 'solfasanctuary@gmail.com' || user?.email === sheet.uploadedBy) return;
+
+    // ── Deduplication check (no network call needed yet) ─────────────────────
+    const storageKey = `solfa_${type}_${sheet.id}`;
+    if (localStorage.getItem(storageKey)) return; // already counted this session
+
+    // ── Optimistic UI update — happens instantly, before any network call ─────
+    if (type === 'views') setLocalViews(v => v + 1);
+    else setLocalDownloads(d => d + 1);
+
+    // Mark counted immediately so rapid re-triggers (e.g. remount) are ignored.
+    localStorage.setItem(storageKey, '1');
 
     try {
+      // ── Attempt logged-in dedup via interactions table ────────────────────
+      // We get the session from the cached client (no extra network call).
+      const { data: { session } } = await db.auth.getSession();
+      const user = session?.user ?? null;
+
+      // Don't count views/downloads from admins or the sheet's own uploader.
+      if (user?.email === 'solfasanctuary@gmail.com' || user?.email === sheet.uploadedBy) {
+        // Undo the optimistic increment — this user shouldn't be counted.
+        if (type === 'views') setLocalViews(v => v - 1);
+        else setLocalDownloads(d => d - 1);
+        localStorage.removeItem(storageKey);
+        return;
+      }
+
       if (user) {
+        // Logged-in: use interactions table so the dedup persists across devices.
         const interactionId = `${user.id}_${sheet.id}_${type}`;
-        const { data: existing } = await db
-          .from('interactions')
-          .select('id')
-          .eq('id', interactionId)
-          .single();
-
-        if (!existing) {
-          await db.from('interactions').insert({
-            id: interactionId,
-            user_id: user.id,
-            sheet_id: sheet.id,
-            type,
-          });
-
-          const { data: currentSheet } = await db
-            .from('sheets')
-            .select(type)
-            .eq('id', sheet.id)
-            .single();
-
-          const currentCount = currentSheet ? (currentSheet as any)[type] : 0;
-          await db.from('sheets').update({ [type]: currentCount + 1 }).eq('id', sheet.id);
-        }
-      } else {
-        const storageKey = `solfa_sanctuary_${type}_${sheet.id}`;
-        if (!localStorage.getItem(storageKey)) {
-          localStorage.setItem(storageKey, 'true');
-
-          const { data: currentSheet } = await db
-            .from('sheets')
-            .select(type)
-            .eq('id', sheet.id)
-            .single();
-
-          const currentCount = currentSheet ? (currentSheet as any)[type] : 0;
-          await db.from('sheets').update({ [type]: currentCount + 1 }).eq('id', sheet.id);
+        const { error: insertError } = await db.from('interactions').insert({
+          id: interactionId,
+          user_id: user.id,
+          sheet_id: sheet.id,
+          type,
+        });
+        // If the row already exists (unique constraint), don't increment.
+        if (insertError) {
+          if (type === 'views') setLocalViews(v => v - 1);
+          else setLocalDownloads(d => d - 1);
+          return;
         }
       }
-    } catch (error) {
-      console.error('Tracking error:', error);
+
+      // ── Atomic increment via RPC — single SQL: UPDATE SET x = x + 1 ───────
+      // Eliminates the read-modify-write race condition of the old approach.
+      await db.rpc('increment_sheet_counter', {
+        p_sheet_id: sheet.id,
+        p_field: type,
+      });
+    } catch {
+      // Silently ignore tracking errors — never break the user experience.
     }
   };
 
@@ -331,18 +346,18 @@ const FullPreviewPage: React.FC<FullPreviewPageProps> = ({
               </div>
               <button onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} className={`lg:hidden p-2 rounded-lg transition-colors ${darkMode ? 'text-slate-400 hover:text-white' : 'text-slate-500 hover:text-slate-900'}`}>{isMobileMenuOpen ? <ChevronUp size={24} /> : <Menu size={24} />}</button>
               <div className="hidden lg:flex flex-col justify-center gap-1 border-l border-slate-700/50 pl-6 shrink-0">
-                <div className="flex items-center gap-2"><Eye size={16} className="text-blue-400" /><span className={`text-xs font-bold ${textPrimary}`}>{sheet.views}</span></div>
-                <div className="flex items-center gap-2"><Download size={16} className="text-green-500" /><span className={`text-xs font-bold ${textPrimary}`}>{sheet.downloads}</span></div>
+                <div className="flex items-center gap-2"><Eye size={16} className="text-blue-400" /><span className={`text-xs font-bold ${textPrimary}`}>{localViews}</span></div>
+                <div className="flex items-center gap-2"><Download size={16} className="text-green-500" /><span className={`text-xs font-bold ${textPrimary}`}>{localDownloads}</span></div>
               </div>
             </div>
             <div className={`${isMobileMenuOpen ? 'flex' : 'hidden'} lg:flex flex-col lg:flex-row flex-1 items-start lg:items-center justify-between gap-0.5 lg:gap-0 animate-in slide-in-from-top-2 duration-300 lg:animate-none`}>
               <div className="flex-1 grid grid-cols-3 lg:grid-cols-2 justify-center gap-y-0 gap-x-2 lg:gap-x-12 lg:px-8 lg:border-x border-slate-700/50 w-full lg:w-auto">
                 <div className="flex items-center gap-1.5 text-[10px] lg:text-[11px] min-w-0 lg:w-[100px]"><MusicIcon size={14} className="text-slate-500 shrink-0" /><span className={`font-bold truncate ${textPrimary}`}>{sheet.type}</span></div>
                 <div className="flex items-center gap-1.5 text-[10px] lg:text-[11px] min-w-0 lg:w-auto"><Calendar size={14} className="text-slate-500 shrink-0" /><span className={`font-bold truncate ${textPrimary}`}>{sheet.uploadedAt}</span></div>
-                <div className="lg:hidden flex items-center gap-1.5 text-[10px] min-w-0"><Eye size={14} className="text-blue-400 shrink-0" /><span className={`font-bold truncate ${textPrimary}`}>{sheet.views}</span></div>
+                <div className="lg:hidden flex items-center gap-1.5 text-[10px] min-w-0"><Eye size={14} className="text-blue-400 shrink-0" /><span className={`font-bold truncate ${textPrimary}`}>{localViews}</span></div>
                 <div className="flex items-center gap-1.5 text-[10px] lg:text-[11px] min-w-0 lg:w-[100px]"><FileText size={14} className="text-slate-500 shrink-0" /><span className={`font-bold truncate ${textPrimary}`}>{sheet.fileSize}</span></div>
                 <div className="flex items-center gap-1.5 text-[10px] lg:text-[11px] min-w-0 lg:w-auto"><User size={14} className="text-slate-500 shrink-0" /><span className={`font-bold truncate ${textPrimary}`}>{sheet.uploadedBy.split('@')[0]}</span></div>
-                <div className="lg:hidden flex items-center gap-1.5 text-[10px] min-w-0"><Download size={14} className="text-green-500 shrink-0" /><span className={`font-bold truncate ${textPrimary}`}>{sheet.downloads}</span></div>
+                <div className="lg:hidden flex items-center gap-1.5 text-[10px] min-w-0"><Download size={14} className="text-green-500 shrink-0" /><span className={`font-bold truncate ${textPrimary}`}>{localDownloads}</span></div>
               </div>
               <div className="flex items-center gap-2 md:gap-3 w-full lg:w-auto">
                 <button onClick={onThemeToggle} className={`p-2.5 rounded-xl border transition-colors shrink-0 ${darkMode ? 'border-slate-800 text-slate-400 hover:text-white hover:bg-slate-900' : 'border-slate-200 text-slate-500 hover:text-slate-900 hover:bg-slate-50'}`} title="Toggle Theme">{darkMode ? <Sun size={18} /> : <Moon size={18} />}</button>
