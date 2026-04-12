@@ -181,7 +181,10 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, darkMode }) => {
                   <div className="relative">
                     <UserIcon className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
                     <input
+                      id="display-name"
+                      name="display-name"
                       type="text"
+                      autoComplete="name"
                       value={displayName}
                       onChange={e => setDisplayName(e.target.value)}
                       placeholder="Enter your name"
@@ -197,7 +200,10 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, darkMode }) => {
                 <div className="relative">
                   <Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
                   <input
+                    id="email"
+                    name="email"
                     type="email"
+                    autoComplete="email"
                     value={email}
                     onChange={e => setEmail(e.target.value)}
                     placeholder="name@example.com"
@@ -220,7 +226,10 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, darkMode }) => {
                   <div className="relative">
                     <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
                     <input
+                      id="password"
+                      name="password"
                       type="password"
+                      autoComplete={mode === 'signup' ? 'new-password' : 'current-password'}
                       value={password}
                       onChange={e => setPassword(e.target.value)}
                       placeholder="••••••••"
