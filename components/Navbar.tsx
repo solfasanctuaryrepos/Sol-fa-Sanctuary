@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Home, Music, LayoutDashboard, ShieldAlert, Moon, Sun, User as UserIcon, LogOut, ChevronDown, LogIn, Info, BookOpen, Keyboard, HelpCircle } from 'lucide-react';
+import { Home, Music, LayoutDashboard, ShieldAlert, Moon, Sun, LogOut, LogIn, Info, BookOpen, HelpCircle } from 'lucide-react';
 import { View } from '../types';
 
 interface NavbarProps {
@@ -61,11 +61,9 @@ const Navbar: React.FC<NavbarProps> = ({ activeView, onViewChange, currentUser, 
             <NavItem id="home" icon={Home} label="Home" />
             <NavItem id="library" icon={Music} label="Music Library" />
             <NavItem id="about" icon={Info} label="About" />
-            <NavItem id="help" icon={HelpCircle} label="Help" />
             {currentUser && (
               <>
                 <NavItem id="dashboard" icon={LayoutDashboard} label="Dashboard" />
-                <NavItem id="collections" icon={BookOpen} label="Collections" />
                 {currentUser.role === 'admin' && <NavItem id="admin" icon={ShieldAlert} label="Admin" />}
               </>
             )}
@@ -73,16 +71,6 @@ const Navbar: React.FC<NavbarProps> = ({ activeView, onViewChange, currentUser, 
         </div>
 
         <div className="flex items-center gap-2">
-          {onShowShortcuts && (
-            <button
-              onClick={onShowShortcuts}
-              aria-label="Keyboard shortcuts"
-              title="Keyboard shortcuts (?)"
-              className={`p-2 border rounded-lg transition-colors ${darkMode ? 'text-slate-400 hover:text-slate-100 border-slate-800 hover:bg-slate-900' : 'text-slate-500 hover:text-slate-900 border-slate-200 hover:bg-slate-50'}`}
-            >
-              <Keyboard size={18} />
-            </button>
-          )}
           <button
             onClick={onThemeToggle}
             aria-label={darkMode ? 'Switch to light mode' : 'Switch to dark mode'}
@@ -110,6 +98,14 @@ const Navbar: React.FC<NavbarProps> = ({ activeView, onViewChange, currentUser, 
                   <button onClick={() => { onViewChange('dashboard'); setShowProfileMenu(false); }} className={`w-full flex items-center gap-3 px-4 py-2 text-sm transition-colors ${darkMode ? 'text-slate-300 hover:bg-slate-800' : 'text-slate-700 hover:bg-slate-50'}`}>
                     <LayoutDashboard size={16} />
                     Dashboard
+                  </button>
+                  <button onClick={() => { onViewChange('collections'); setShowProfileMenu(false); }} className={`w-full flex items-center gap-3 px-4 py-2 text-sm transition-colors ${darkMode ? 'text-slate-300 hover:bg-slate-800' : 'text-slate-700 hover:bg-slate-50'}`}>
+                    <BookOpen size={16} />
+                    Collections
+                  </button>
+                  <button onClick={() => { onViewChange('help'); setShowProfileMenu(false); }} className={`w-full flex items-center gap-3 px-4 py-2 text-sm transition-colors ${darkMode ? 'text-slate-300 hover:bg-slate-800' : 'text-slate-700 hover:bg-slate-50'}`}>
+                    <HelpCircle size={16} />
+                    Help &amp; FAQ
                   </button>
                   {currentUser.role === 'admin' && (
                     <button onClick={() => { onViewChange('admin'); setShowProfileMenu(false); }} className={`w-full flex items-center gap-3 px-4 py-2 text-sm transition-colors ${darkMode ? 'text-slate-300 hover:bg-slate-800' : 'text-slate-700 hover:bg-slate-50'}`}>
