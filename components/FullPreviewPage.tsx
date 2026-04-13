@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Download, Share2, Printer, Eye, Calendar, User, FileText, Music as MusicIcon, X, Moon, Sun, ExternalLink, Menu, ChevronUp, Loader2, AlertTriangle, AlertCircle } from 'lucide-react';
+import { Download, Share2, Printer, Eye, Calendar, User, FileText, Music as MusicIcon, X, Moon, Sun, ExternalLink, Menu, ChevronUp, Loader2, AlertTriangle, AlertCircle, Heart } from 'lucide-react';
 import { MusicSheet } from '../types';
 import { db } from '../supabase';
 
@@ -10,6 +10,10 @@ interface FullPreviewPageProps {
   onClose: () => void;
   isLoggedIn: boolean;
   onAuthRequired: () => void;
+  currentUserId?: string;
+  userFavorites?: string[];
+  onFavoritesChange?: (favs: string[]) => void;
+  onViewProfile?: (email: string) => void;
 }
 
 // ─── Module-level render queue ────────────────────────────────────────────────
@@ -156,7 +160,11 @@ const FullPreviewPage: React.FC<FullPreviewPageProps> = ({
   onThemeToggle,
   onClose,
   isLoggedIn,
-  onAuthRequired
+  onAuthRequired,
+  currentUserId,
+  userFavorites = [],
+  onFavoritesChange,
+  onViewProfile,
 }) => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [pdfDoc, setPdfDoc] = useState<any>(null);
@@ -169,12 +177,20 @@ const FullPreviewPage: React.FC<FullPreviewPageProps> = ({
   // Optimistic local counts — initialised from sheet prop, updated instantly on interaction.
   const [localViews, setLocalViews] = useState(sheet?.views ?? 0);
   const [localDownloads, setLocalDownloads] = useState(sheet?.downloads ?? 0);
+  // Favourites state
+  const [isFavorited, setIsFavorited] = useState(false);
+  const [favLoading, setFavLoading] = useState(false);
 
   // Sync local counts when a different sheet is opened.
   useEffect(() => {
     setLocalViews(sheet?.views ?? 0);
     setLocalDownloads(sheet?.downloads ?? 0);
   }, [sheet?.id]);
+
+  // Sync favorited state from parent's userFavorites
+  useEffect(() => {
+    if (sheet?.id) setIsFavorited(userFavorites.includes(sheet.id));
+  }, [sheet?.id, userFavorites]);
 
   useEffect(() => {
     if (!sheet) return;
@@ -300,6 +316,31 @@ const FullPreviewPage: React.FC<FullPreviewPageProps> = ({
     }
   }, [sheet?.id]);
 
+  const toggleFavorite = async () => {
+    if (!isLoggedIn) { onAuthRequired(); return; }
+    if (!sheet || !currentUserId || favLoading) return;
+    setFavLoading(true);
+    const wasF = isFavorited;
+    setIsFavorited(!wasF);
+    const newFavs = wasF
+      ? userFavorites.filter(id => id !== sheet.id)
+      : [...userFavorites, sheet.id];
+    onFavoritesChange?.(newFavs);
+    try {
+      if (wasF) {
+        await db.from('favorites').delete().eq('user_id', currentUserId).eq('sheet_id', sheet.id);
+      } else {
+        await db.from('favorites').insert({ user_id: currentUserId, sheet_id: sheet.id });
+      }
+    } catch {
+      // Rollback
+      setIsFavorited(wasF);
+      onFavoritesChange?.(userFavorites);
+    } finally {
+      setFavLoading(false);
+    }
+  };
+
   const handleProtectedAction = (action: () => void) => {
     isLoggedIn ? action() : onAuthRequired();
   };
@@ -365,7 +406,7 @@ const FullPreviewPage: React.FC<FullPreviewPageProps> = ({
                 <div className="flex items-center gap-1.5 text-[10px] lg:text-[11px] min-w-0 lg:w-auto"><Calendar size={14} className="text-slate-500 shrink-0" /><span className={`font-bold truncate ${textPrimary}`}>{sheet.uploadedAt}</span></div>
                 <div className="lg:hidden flex items-center gap-1.5 text-[10px] min-w-0"><Eye size={14} className="text-blue-400 shrink-0" /><span className={`font-bold truncate ${textPrimary}`}>{localViews}</span></div>
                 <div className="flex items-center gap-1.5 text-[10px] lg:text-[11px] min-w-0 lg:w-[100px]"><FileText size={14} className="text-slate-500 shrink-0" /><span className={`font-bold truncate ${textPrimary}`}>{sheet.fileSize}</span></div>
-                <div className="flex items-center gap-1.5 text-[10px] lg:text-[11px] min-w-0 lg:w-auto"><User size={14} className="text-slate-500 shrink-0" /><span className={`font-bold truncate ${textPrimary}`}>{sheet.uploadedBy.split('@')[0]}</span></div>
+                <div className="flex items-center gap-1.5 text-[10px] lg:text-[11px] min-w-0 lg:w-auto"><User size={14} className="text-slate-500 shrink-0" />{onViewProfile ? (<button onClick={() => onViewProfile(sheet.uploadedBy)} className={`font-bold truncate hover:text-green-500 transition-colors ${textPrimary}`}>{sheet.uploadedBy.split('@')[0]}</button>) : (<span className={`font-bold truncate ${textPrimary}`}>{sheet.uploadedBy.split('@')[0]}</span>)}</div>
                 <div className="lg:hidden flex items-center gap-1.5 text-[10px] min-w-0"><Download size={14} className="text-green-500 shrink-0" /><span className={`font-bold truncate ${textPrimary}`}>{localDownloads}</span></div>
               </div>
               <div className="flex items-center gap-2 md:gap-3 w-full lg:w-auto">
@@ -374,6 +415,15 @@ const FullPreviewPage: React.FC<FullPreviewPageProps> = ({
                 <div className="flex items-center gap-1.5 md:gap-2 flex-1 lg:flex-none">
                   <button onClick={handleOpenNewTab} aria-label="Open in new tab" className={`p-2.5 rounded-xl border transition-colors shrink-0 ${darkMode ? 'border-slate-800 text-slate-400 hover:text-white hover:bg-slate-900' : 'border-slate-200 text-slate-500 hover:text-slate-900 hover:bg-slate-50 shadow-sm'}`} title="Open in new tab"><ExternalLink size={18} /></button>
                   <button onClick={handleShare} aria-label="Share sheet" className={`p-2.5 rounded-xl border transition-colors shrink-0 ${darkMode ? 'border-slate-800 text-slate-400 hover:text-white hover:bg-slate-900' : 'border-slate-200 text-slate-500 hover:text-slate-900 hover:bg-slate-50 shadow-sm'}`} title="Share"><Share2 size={18} /></button>
+                  <button
+                    onClick={toggleFavorite}
+                    aria-label={isFavorited ? 'Remove from favourites' : 'Add to favourites'}
+                    disabled={favLoading}
+                    className={`p-2.5 rounded-xl border transition-colors shrink-0 ${isFavorited ? 'border-rose-500/50 text-rose-500 bg-rose-500/10' : darkMode ? 'border-slate-800 text-slate-400 hover:text-rose-400 hover:bg-slate-900' : 'border-slate-200 text-slate-500 hover:text-rose-500 hover:bg-slate-50 shadow-sm'}`}
+                    title={isFavorited ? 'Remove favourite' : 'Add to favourites'}
+                  >
+                    <Heart size={18} className={isFavorited ? 'fill-current' : ''} />
+                  </button>
                   <button onClick={handlePrint} aria-label="Print sheet" className={`p-2.5 rounded-xl border transition-colors shrink-0 ${darkMode ? 'border-slate-800 text-slate-400 hover:text-white hover:bg-slate-900' : 'border-slate-200 text-slate-500 hover:text-slate-900 hover:bg-slate-50 shadow-sm'}`} title="Open PDF for printing"><Printer size={18} /></button>
                   <button onClick={handleDownload} aria-label="Download PDF" className="flex-1 lg:flex-none px-4 md:px-6 py-2.5 bg-green-500 hover:bg-green-600 text-slate-950 font-bold rounded-xl transition-all shadow-lg shadow-green-500/10 flex items-center justify-center gap-2 active:scale-95 text-sm md:text-base"><Download size={18} /><span>Download PDF</span></button>
                 </div>

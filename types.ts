@@ -1,5 +1,5 @@
 
-export type View = 'home' | 'library' | 'dashboard' | 'admin' | 'about';
+export type View = 'home' | 'library' | 'dashboard' | 'admin' | 'about' | 'profile';
 export type AdminTab = 'users' | 'content';
 
 export interface MusicSheet {

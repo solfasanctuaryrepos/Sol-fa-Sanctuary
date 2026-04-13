@@ -1,8 +1,10 @@
 
-import { Search, Trash2, ChevronDown, Music, List, Grid, X, ArrowUp, ArrowDown, Lock, Unlock, Globe, Eye, Download, Check, Settings2, Calendar, Users, Shield, User as UserIcon, AlertTriangle, MoreVertical } from 'lucide-react';
+import { Search, Trash2, ChevronDown, Music, List, Grid, X, ArrowUp, ArrowDown, Lock, Unlock, Globe, Eye, Download, Check, Settings2, Calendar, Users, Shield, User as UserIcon, AlertTriangle, MoreVertical, ChevronLeft, ChevronRight } from 'lucide-react';
 import React, { useState, useRef, useEffect, useCallback, memo } from 'react';
 import { AdminTab, MusicSheet, User } from '../types';
 import { db } from '../supabase';
+
+const PAGE_SIZE = 20;
 
 interface AdminDashboardProps {
   onPreview: (sheet: MusicSheet) => void;
@@ -27,7 +29,11 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onPreview, darkMode, sh
   const [users, setUsers] = useState<User[]>([]);
   const columnMenuRef = useRef<HTMLDivElement>(null);
   const [activeMobileMenuId, setActiveMobileMenuId] = useState<string | null>(null);
-  
+  const [contentFilter, setContentFilter] = useState<'all' | 'approved' | 'restricted'>('all');
+  const [sheetPage, setSheetPage] = useState(1);
+  const [userPage, setUserPage] = useState(1);
+  const [roleChangeConfirmation, setRoleChangeConfirmation] = useState<{ user: User; newRole: 'admin' | 'user' } | null>(null);
+
   // State for the custom delete confirmation modal
   const [deleteConfirmation, setDeleteConfirmation] = useState<{
     id: string;
@@ -128,23 +134,25 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onPreview, darkMode, sh
     }
   };
 
-  const toggleUserRole = async (user: User) => {
+  const toggleUserRole = (user: User) => {
     if (user.email === 'solfasanctuary@gmail.com') {
       alert("This is the primary admin account and its role cannot be changed.");
       return;
     }
     const newRole = user.role === 'admin' ? 'user' : 'admin';
-    setUsers(prev => prev.map(u => u.id === user.id ? { ...u, role: newRole } : u)); // optimistic
-    try {
-      const { error } = await db
-        .from('profiles')
-        .update({ role: newRole })
-        .eq('id', user.id);
+    setRoleChangeConfirmation({ user, newRole });
+  };
 
+  const executeRoleChange = async () => {
+    if (!roleChangeConfirmation) return;
+    const { user, newRole } = roleChangeConfirmation;
+    setRoleChangeConfirmation(null);
+    setUsers(prev => prev.map(u => u.id === user.id ? { ...u, role: newRole } : u));
+    try {
+      const { error } = await db.from('profiles').update({ role: newRole }).eq('id', user.id);
       if (error) throw error;
-      // no more fetchUsers() — optimistic update already applied above
     } catch (error: any) {
-      setUsers(prev => prev.map(u => u.id === user.id ? { ...u, role: user.role } : u)); // rollback
+      setUsers(prev => prev.map(u => u.id === user.id ? { ...u, role: user.role } : u));
       alert("Failed to update user role.");
     }
   };
@@ -222,13 +230,14 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onPreview, darkMode, sh
     }
   };
 
-  const filteredSheets = sheets.filter(s => 
-    s.title.toLowerCase().includes(searchTerm.toLowerCase()) || 
-    s.composer.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredSheets = sheets.filter(s => {
+    const matchesSearch = s.title.toLowerCase().includes(searchTerm.toLowerCase()) || s.composer.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesFilter = contentFilter === 'all' || (contentFilter === 'restricted' ? s.isAdminRestricted : !s.isAdminRestricted);
+    return matchesSearch && matchesFilter;
+  });
 
-  const filteredUsers = users.filter(u => 
-    u.email.toLowerCase().includes(searchTerm.toLowerCase()) || 
+  const filteredUsers = users.filter(u =>
+    u.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
     (u.displayName && u.displayName.toLowerCase().includes(searchTerm.toLowerCase()))
   );
 
@@ -264,6 +273,16 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onPreview, darkMode, sh
     setVisibleUserColumns(prev => ({ ...prev, [col]: !prev[col] }));
   };
 
+  // Pagination
+  const pagedSheets = sortedSheets.slice((sheetPage - 1) * PAGE_SIZE, sheetPage * PAGE_SIZE);
+  const totalSheetPages = Math.max(1, Math.ceil(sortedSheets.length / PAGE_SIZE));
+  const pagedUsers = sortedUsers.slice((userPage - 1) * PAGE_SIZE, userPage * PAGE_SIZE);
+  const totalUserPages = Math.max(1, Math.ceil(sortedUsers.length / PAGE_SIZE));
+
+  // Reset pages on search change
+  useEffect(() => { setSheetPage(1); setUserPage(1); }, [searchTerm]);
+  useEffect(() => { setSheetPage(1); }, [contentFilter]);
+
   const textPrimary = darkMode ? 'text-slate-100' : 'text-slate-900';
   const textSecondary = darkMode ? 'text-slate-400' : 'text-slate-600';
   const cardBg = darkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200 shadow-sm';
@@ -295,6 +314,27 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onPreview, darkMode, sh
           <Music size={16} /> <span className="hidden sm:inline">Content Moderation</span><span className="sm:hidden">Content</span>
         </button>
       </div>
+
+      {/* Content filter pills — shown only on content tab */}
+      {activeTab === 'content' && (
+        <div className="flex gap-2 flex-wrap">
+          {(['all', 'approved', 'restricted'] as const).map(f => (
+            <button
+              key={f}
+              onClick={() => setContentFilter(f)}
+              className={`px-3 py-1.5 rounded-full text-xs font-bold border transition-colors capitalize ${
+                contentFilter === f
+                  ? 'bg-green-500 text-white border-green-500'
+                  : darkMode
+                    ? 'bg-transparent border-slate-700 text-slate-400 hover:border-slate-500 hover:text-slate-200'
+                    : 'bg-transparent border-slate-200 text-slate-600 hover:border-slate-400 hover:text-slate-900'
+              }`}
+            >
+              {f}
+            </button>
+          ))}
+        </div>
+      )}
 
       <div className="space-y-6">
         <div className={`border rounded-2xl overflow-hidden transition-colors ${tableBg}`}>
@@ -360,7 +400,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onPreview, darkMode, sh
           {activeTab === 'content' ? (
             viewMode === 'grid' ? (
               <div className="p-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-                {sortedSheets.map(sheet => (
+                {pagedSheets.map(sheet => (
                   <div key={sheet.id} className={`border rounded-2xl overflow-hidden group hover:border-green-500/50 transition-all flex flex-col ${cardBg}`}>
                     <div 
                       className="aspect-[3/4] overflow-hidden relative cursor-pointer" 
@@ -488,7 +528,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onPreview, darkMode, sh
                     </tr>
                   </thead>
                   <tbody className={`divide-y ${darkMode ? 'divide-slate-800' : 'divide-slate-100'}`}>
-                    {sortedSheets.map(sheet => (
+                    {pagedSheets.map(sheet => (
                       <tr key={sheet.id} className={darkMode ? 'hover:bg-slate-800/30' : 'hover:bg-slate-50'}>
                         {visibleSheetColumns.sheet && (
                           <td className="px-4 md:px-6 py-4">
@@ -591,7 +631,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onPreview, darkMode, sh
                   </tr>
                 </thead>
                 <tbody className={`divide-y ${darkMode ? 'divide-slate-800' : 'divide-slate-100'}`}>
-                  {sortedUsers.map(user => (
+                  {pagedUsers.map(user => (
                     <tr key={user.id} className={darkMode ? 'hover:bg-slate-800/30' : 'hover:bg-slate-50'}>
                       {visibleUserColumns.user && (
                         <td className="px-4 md:px-6 py-4">
@@ -656,7 +696,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onPreview, darkMode, sh
                       </td>
                     </tr>
                   ))}
-                  {sortedUsers.length === 0 && (
+                  {pagedUsers.length === 0 && (
                     <tr>
                       <td colSpan={5} className="px-6 py-12 text-center text-slate-500">
                         No users found. New signups will appear here.
@@ -670,6 +710,28 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onPreview, darkMode, sh
         </div>
       </div>
 
+      {/* Pagination footer */}
+      {activeTab === 'content' && totalSheetPages > 1 && (
+        <div className={`flex items-center justify-between text-sm ${textSecondary}`}>
+          <span>Showing {Math.min((sheetPage - 1) * PAGE_SIZE + 1, sortedSheets.length)}–{Math.min(sheetPage * PAGE_SIZE, sortedSheets.length)} of {sortedSheets.length}</span>
+          <div className="flex items-center gap-1">
+            <button onClick={() => setSheetPage(p => Math.max(1, p - 1))} disabled={sheetPage === 1} className="p-1.5 rounded hover:text-green-500 transition-colors disabled:opacity-30"><ChevronLeft size={16} /></button>
+            <span>{sheetPage} / {totalSheetPages}</span>
+            <button onClick={() => setSheetPage(p => Math.min(totalSheetPages, p + 1))} disabled={sheetPage === totalSheetPages} className="p-1.5 rounded hover:text-green-500 transition-colors disabled:opacity-30"><ChevronRight size={16} /></button>
+          </div>
+        </div>
+      )}
+      {activeTab === 'users' && totalUserPages > 1 && (
+        <div className={`flex items-center justify-between text-sm ${textSecondary}`}>
+          <span>Showing {Math.min((userPage - 1) * PAGE_SIZE + 1, sortedUsers.length)}–{Math.min(userPage * PAGE_SIZE, sortedUsers.length)} of {sortedUsers.length}</span>
+          <div className="flex items-center gap-1">
+            <button onClick={() => setUserPage(p => Math.max(1, p - 1))} disabled={userPage === 1} className="p-1.5 rounded hover:text-green-500 transition-colors disabled:opacity-30"><ChevronLeft size={16} /></button>
+            <span>{userPage} / {totalUserPages}</span>
+            <button onClick={() => setUserPage(p => Math.min(totalUserPages, p + 1))} disabled={userPage === totalUserPages} className="p-1.5 rounded hover:text-green-500 transition-colors disabled:opacity-30"><ChevronRight size={16} /></button>
+          </div>
+        </div>
+      )}
+
       {/* Custom Delete Confirmation Modal */}
       {deleteConfirmation && (
         <AdminDeleteConfirmModal
@@ -680,6 +742,31 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onPreview, darkMode, sh
           textPrimary={textPrimary}
           textSecondary={textSecondary}
         />
+      )}
+
+      {/* Role change confirmation modal */}
+      {roleChangeConfirmation && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center px-4 bg-black/70 backdrop-blur-sm animate-in fade-in duration-300">
+          <div className={`w-full max-w-md rounded-3xl overflow-hidden border animate-in zoom-in-95 duration-200 ${darkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200 shadow-2xl'}`}>
+            <div className="p-8 text-center">
+              <div className="w-16 h-16 rounded-2xl bg-purple-500/10 flex items-center justify-center mx-auto mb-6">
+                <Shield className="text-purple-500" size={32} />
+              </div>
+              <h2 className={`text-2xl font-serif font-bold mb-2 ${textPrimary}`}>
+                {roleChangeConfirmation.newRole === 'admin' ? 'Promote to Admin?' : 'Remove Admin Access?'}
+              </h2>
+              <p className={`mb-8 ${textSecondary}`}>
+                {roleChangeConfirmation.newRole === 'admin'
+                  ? `Promote ${roleChangeConfirmation.user.displayName || roleChangeConfirmation.user.email} to Admin? They will have full access to all content and user management.`
+                  : `Remove admin access from ${roleChangeConfirmation.user.displayName || roleChangeConfirmation.user.email}?`}
+              </p>
+              <div className="flex gap-3">
+                <button autoFocus onClick={() => setRoleChangeConfirmation(null)} className={`flex-1 py-3.5 font-bold rounded-xl border transition-all active:scale-95 ${darkMode ? 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700' : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'}`}>Cancel</button>
+                <button onClick={executeRoleChange} className="flex-1 py-3.5 bg-purple-500 hover:bg-purple-600 text-white font-bold rounded-xl transition-all shadow-xl shadow-purple-500/20 active:scale-95 flex items-center justify-center gap-2"><Shield size={18} /> Confirm</button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

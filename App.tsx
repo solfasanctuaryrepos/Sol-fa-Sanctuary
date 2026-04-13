@@ -9,6 +9,7 @@ import AboutPage from './components/AboutPage';
 import UploadModal from './components/UploadModal';
 import AuthModal from './components/AuthModal';
 import FullPreviewPage from './components/FullPreviewPage';
+import ProfilePage from './components/ProfilePage';
 import { View, MusicSheet } from './types';
 import { supabase, auth, db } from './supabase';
 
@@ -21,7 +22,9 @@ const App: React.FC = () => {
   const [activePreview, setActivePreview] = useState<MusicSheet | null>(null);
   const [sheets, setSheets] = useState<MusicSheet[]>([]);
   
-  const [currentUser, setCurrentUser] = useState<{ email: string; role: 'admin' | 'user'; emailVerified: boolean } | null>(null);
+  const [currentUser, setCurrentUser] = useState<{ id: string; email: string; role: 'admin' | 'user'; emailVerified: boolean } | null>(null);
+  const [userFavorites, setUserFavorites] = useState<string[]>([]);
+  const [profileEmail, setProfileEmail] = useState<string>('');
   // Guards onAuthStateChange from firing before getSession() resolves.
   const authReadyRef = useRef(false);
   // Tracks the last sheet query key to skip redundant re-fetches.
@@ -138,9 +141,22 @@ const App: React.FC = () => {
   }, [fetchSheets]);
 
   // ─── AUTH ────────────────────────────────────────────────────────────────────
+  // Fetch user's favorites from DB
+  const fetchUserFavorites = useCallback(async (userId: string) => {
+    try {
+      const { data } = await db
+        .from('favorites')
+        .select('sheet_id')
+        .eq('user_id', userId);
+      setUserFavorites((data || []).map((r: any) => r.sheet_id));
+    } catch {
+      setUserFavorites([]);
+    }
+  }, []);
+
   // Load role from profiles table, fall back to email-based heuristic.
   const resolveUser = useCallback(async (user: any) => {
-    if (!user?.email) { setCurrentUser(null); return; }
+    if (!user?.email) { setCurrentUser(null); setUserFavorites([]); return; }
     try {
       const { data: profile } = await db
         .from('profiles')
@@ -148,18 +164,21 @@ const App: React.FC = () => {
         .eq('id', user.id)
         .maybeSingle();
       setCurrentUser({
+        id: user.id,
         email: user.email,
         role: (profile?.role ?? (user.email === 'solfasanctuary@gmail.com' ? 'admin' : 'user')) as 'admin' | 'user',
         emailVerified: !!user.email_confirmed_at,
       });
+      fetchUserFavorites(user.id);
     } catch {
       setCurrentUser({
+        id: user.id,
         email: user.email,
         role: user.email === 'solfasanctuary@gmail.com' ? 'admin' : 'user',
         emailVerified: !!user.email_confirmed_at,
       });
     }
-  }, []);
+  }, [fetchUserFavorites]);
 
   useEffect(() => {
     // getSession() is the single source of truth on mount.
@@ -199,10 +218,17 @@ const App: React.FC = () => {
 
   const handleLogout = () => {
     setCurrentUser(null);
+    setUserFavorites([]);
     setCurrentView('home');
     setActivePreview(null);
     setIsAuthModalOpen(false);
     auth.signOut().catch(() => {});
+  };
+
+  const handleViewProfile = (email: string) => {
+    setProfileEmail(email);
+    setCurrentView('profile');
+    setActivePreview(null);
   };
 
   const toggleTheme = () => {
@@ -232,14 +258,19 @@ const App: React.FC = () => {
     switch (currentView) {
       case 'home':
         return (
-          <LandingPage 
-            onUploadClick={currentUser ? () => setIsUploadModalOpen(true) : handleOpenLogin} 
-            onBrowseClick={() => { setSearchQuery(''); setCurrentView('library'); }} 
+          <LandingPage
+            onUploadClick={currentUser ? () => setIsUploadModalOpen(true) : handleOpenLogin}
+            onBrowseClick={() => { setSearchQuery(''); setCurrentView('library'); }}
             onSearch={handleHomeSearch}
             onPreview={handlePreview}
             isLoggedIn={!!currentUser}
             darkMode={darkMode}
             sheets={sheets}
+            currentUserId={currentUser?.id}
+            userFavorites={userFavorites}
+            onFavoritesChange={setUserFavorites}
+            onAuthRequired={() => setIsAuthModalOpen(true)}
+            onViewProfile={handleViewProfile}
           />
         );
       case 'dashboard':
@@ -250,12 +281,27 @@ const App: React.FC = () => {
             darkMode={darkMode}
             sheets={sheets}
             userEmail={currentUser.email}
+            userId={currentUser.id}
             onSheetDeleted={(id) => setSheets(prev => prev.filter(s => s.id !== id))}
             onSheetUpdated={(sheet) => setSheets(prev => prev.map(s => s.id === sheet.id ? sheet : s))}
+            userFavorites={userFavorites}
+            onFavoritesChange={setUserFavorites}
           />
         ) : null;
       case 'library':
-        return <MusicLibrary darkMode={darkMode} initialSearch={searchQuery} onPreview={handlePreview} sheets={sheets} />;
+        return (
+          <MusicLibrary
+            darkMode={darkMode}
+            initialSearch={searchQuery}
+            onPreview={handlePreview}
+            sheets={sheets}
+            currentUserId={currentUser?.id}
+            userFavorites={userFavorites}
+            onFavoritesChange={setUserFavorites}
+            onAuthRequired={() => setIsAuthModalOpen(true)}
+            onViewProfile={handleViewProfile}
+          />
+        );
       case 'admin':
         return currentUser?.role === 'admin' ? (
           <AdminDashboard
@@ -269,15 +315,30 @@ const App: React.FC = () => {
         ) : null;
       case 'about':
         return <AboutPage darkMode={darkMode} />;
+      case 'profile':
+        return (
+          <ProfilePage
+            email={profileEmail}
+            sheets={sheets}
+            currentUserEmail={currentUser?.email}
+            darkMode={darkMode}
+            onPreview={handlePreview}
+          />
+        );
       default:
-        return <LandingPage 
-          onUploadClick={currentUser ? () => setIsUploadModalOpen(true) : handleOpenLogin} 
-          onBrowseClick={() => { setSearchQuery(''); setCurrentView('library'); }} 
+        return <LandingPage
+          onUploadClick={currentUser ? () => setIsUploadModalOpen(true) : handleOpenLogin}
+          onBrowseClick={() => { setSearchQuery(''); setCurrentView('library'); }}
           onSearch={handleHomeSearch}
           onPreview={handlePreview}
           isLoggedIn={!!currentUser}
           darkMode={darkMode}
           sheets={sheets}
+          currentUserId={currentUser?.id}
+          userFavorites={userFavorites}
+          onFavoritesChange={setUserFavorites}
+          onAuthRequired={() => setIsAuthModalOpen(true)}
+          onViewProfile={handleViewProfile}
         />;
     }
   };
@@ -289,13 +350,17 @@ const App: React.FC = () => {
   return (
     <div className={`min-h-screen transition-colors duration-300 selection:bg-green-500/30 selection:text-green-200 font-sans ${themeClasses}`}>
       {activePreview ? (
-        <FullPreviewPage 
-          sheet={activePreview} 
-          darkMode={darkMode} 
-          onThemeToggle={toggleTheme} 
+        <FullPreviewPage
+          sheet={activePreview}
+          darkMode={darkMode}
+          onThemeToggle={toggleTheme}
           onClose={() => setActivePreview(null)}
           isLoggedIn={!!currentUser}
           onAuthRequired={() => setIsAuthModalOpen(true)}
+          currentUserId={currentUser?.id}
+          userFavorites={userFavorites}
+          onFavoritesChange={setUserFavorites}
+          onViewProfile={handleViewProfile}
         />
       ) : (
         <>

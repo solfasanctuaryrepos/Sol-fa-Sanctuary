@@ -1,27 +1,45 @@
-import { Search, List, Grid, Eye, Download, Music as MusicIcon, ArrowUp, ArrowDown, SearchX } from 'lucide-react';
+import { Search, List, Grid, Eye, Download, Music as MusicIcon, ArrowUp, ArrowDown, SearchX, Heart } from 'lucide-react';
 import React, { useState, useEffect, useRef, useMemo, memo } from 'react';
 import { MusicSheet } from '../types';
+import { db } from '../supabase';
 
 interface MusicLibraryProps {
   darkMode: boolean;
   initialSearch?: string;
   onPreview: (sheet: MusicSheet) => void;
   sheets: MusicSheet[];
+  currentUserId?: string;
+  userFavorites?: string[];
+  onFavoritesChange?: (favs: string[]) => void;
+  onAuthRequired?: () => void;
+  onViewProfile?: (email: string) => void;
 }
 
 type SortConfig = { key: keyof MusicSheet; direction: 'asc' | 'desc' } | null;
 
+const ONE_WEEK_MS = 7 * 24 * 60 * 60 * 1000;
+
+function isNewThisWeek(uploadedAt: string): boolean {
+  try {
+    const d = new Date(uploadedAt);
+    return !isNaN(d.getTime()) && Date.now() - d.getTime() < ONE_WEEK_MS;
+  } catch { return false; }
+}
+
 // Extracted for performance optimization with memoization
-const SheetCard = memo(({ sheet, onPreview, activeMobileMenuId, setActiveMobileMenuId, darkMode }: {
+const SheetCard = memo(({ sheet, onPreview, activeMobileMenuId, setActiveMobileMenuId, darkMode, isFavorited, onToggleFavorite }: {
   sheet: MusicSheet;
   onPreview: (s: MusicSheet) => void;
   activeMobileMenuId: string | null;
   setActiveMobileMenuId: (id: string | null) => void;
   darkMode: boolean;
+  isFavorited: boolean;
+  onToggleFavorite: (sheet: MusicSheet) => void;
 }) => {
   const tableBg = darkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200 shadow-sm';
   const textPrimary = darkMode ? 'text-slate-100' : 'text-slate-900';
   const textSecondary = darkMode ? 'text-slate-400' : 'text-slate-600';
+  const isNew = isNewThisWeek(sheet.uploadedAt);
 
   const isActive = activeMobileMenuId === sheet.id;
 
@@ -82,6 +100,22 @@ const SheetCard = memo(({ sheet, onPreview, activeMobileMenuId, setActiveMobileM
           className={`w-full h-full object-cover transition-transform duration-500 ${isActive ? 'scale-105' : 'group-hover:scale-105'}`}
         />
 
+        {/* NEW badge */}
+        {isNew && (
+          <div className="absolute top-2 left-2 pointer-events-none z-10">
+            <span className="bg-green-500 text-white text-[9px] font-bold uppercase px-1.5 py-0.5 rounded">NEW</span>
+          </div>
+        )}
+
+        {/* Heart favourite button */}
+        <button
+          onClick={(e) => { e.stopPropagation(); onToggleFavorite(sheet); }}
+          aria-label={isFavorited ? 'Remove from favourites' : 'Add to favourites'}
+          className={`absolute top-2 right-2 z-10 p-1.5 rounded-full backdrop-blur-sm transition-all ${isFavorited ? 'bg-rose-500 text-white' : 'bg-black/40 text-white/70 hover:text-rose-400'}`}
+        >
+          <Heart size={14} className={isFavorited ? 'fill-current' : ''} />
+        </button>
+
         {/* Action overlay — shown on desktop hover OR mobile long-press */}
         <div className={`absolute inset-0 bg-black/60 transition-opacity duration-300 flex flex-col justify-end p-4 gap-2 ${isActive ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
           <button
@@ -119,13 +153,29 @@ const SheetCard = memo(({ sheet, onPreview, activeMobileMenuId, setActiveMobileM
 type TypeFilter = 'All' | 'Classical' | 'Liturgical' | 'Choral' | 'Contemporary';
 type SortOption = 'newest' | 'views' | 'downloads' | 'az';
 
-const MusicLibrary: React.FC<MusicLibraryProps> = ({ darkMode, initialSearch = '', onPreview, sheets }) => {
+const MusicLibrary: React.FC<MusicLibraryProps> = ({ darkMode, initialSearch = '', onPreview, sheets, currentUserId, userFavorites = [], onFavoritesChange, onAuthRequired, onViewProfile }) => {
   const [searchTerm, setSearchTerm] = useState(initialSearch);
   const [viewMode, setViewMode] = useState<'list' | 'grid'>('grid');
   const [sortConfig, setSortConfig] = useState<SortConfig>(null);
   const [activeMobileMenuId, setActiveMobileMenuId] = useState<string | null>(null);
   const [typeFilter, setTypeFilter] = useState<TypeFilter>('All');
   const [sortOption, setSortOption] = useState<SortOption>('newest');
+
+  const handleToggleFavorite = async (sheet: MusicSheet) => {
+    if (!currentUserId) { onAuthRequired?.(); return; }
+    const wasFav = userFavorites.includes(sheet.id);
+    const newFavs = wasFav ? userFavorites.filter(id => id !== sheet.id) : [...userFavorites, sheet.id];
+    onFavoritesChange?.(newFavs);
+    try {
+      if (wasFav) {
+        await db.from('favorites').delete().eq('user_id', currentUserId).eq('sheet_id', sheet.id);
+      } else {
+        await db.from('favorites').insert({ user_id: currentUserId, sheet_id: sheet.id });
+      }
+    } catch {
+      onFavoritesChange?.(userFavorites); // rollback
+    }
+  };
 
   const [visibleColumns] = useState({
     title: true,
@@ -282,6 +332,8 @@ const MusicLibrary: React.FC<MusicLibraryProps> = ({ darkMode, initialSearch = '
               activeMobileMenuId={activeMobileMenuId}
               setActiveMobileMenuId={setActiveMobileMenuId}
               darkMode={darkMode}
+              isFavorited={userFavorites.includes(sheet.id)}
+              onToggleFavorite={handleToggleFavorite}
             />
           ))}
         </div>
@@ -318,10 +370,22 @@ const MusicLibrary: React.FC<MusicLibraryProps> = ({ darkMode, initialSearch = '
                   <tr key={sheet.id} className={`transition-colors ${darkMode ? 'hover:bg-slate-800/30' : 'hover:bg-slate-50'}`}>
                     {visibleColumns.title && (
                       <td className="px-4 md:px-6 py-4">
-                        <button onClick={() => onPreview(sheet)} className="flex items-center gap-3 text-left group/title active:scale-[0.98] transition-transform">
-                          <img src={sheet.thumbnailUrl} className="w-10 h-10 object-cover rounded border border-slate-700/50" alt="" />
-                          <span className={`font-medium group-hover/title:text-green-500 transition-colors ${darkMode ? 'text-slate-200' : 'text-slate-800'}`}>{sheet.title}</span>
-                        </button>
+                        <div className="flex items-center gap-3">
+                          <button onClick={() => onPreview(sheet)} className="flex items-center gap-3 text-left group/title active:scale-[0.98] transition-transform flex-1 min-w-0">
+                            <img src={sheet.thumbnailUrl} className="w-10 h-10 object-cover rounded border border-slate-700/50 shrink-0" alt="" />
+                            <span className={`font-medium group-hover/title:text-green-500 transition-colors truncate ${darkMode ? 'text-slate-200' : 'text-slate-800'}`}>{sheet.title}</span>
+                          </button>
+                          {isNewThisWeek(sheet.uploadedAt) && (
+                            <span className="bg-green-500 text-white text-[9px] font-bold uppercase px-1.5 py-0.5 rounded shrink-0">NEW</span>
+                          )}
+                          <button
+                            onClick={(e) => { e.stopPropagation(); handleToggleFavorite(sheet); }}
+                            aria-label={userFavorites.includes(sheet.id) ? 'Remove from favourites' : 'Add to favourites'}
+                            className={`shrink-0 p-1 transition-colors ${userFavorites.includes(sheet.id) ? 'text-rose-500' : darkMode ? 'text-slate-600 hover:text-rose-400' : 'text-slate-300 hover:text-rose-500'}`}
+                          >
+                            <Heart size={14} className={userFavorites.includes(sheet.id) ? 'fill-current' : ''} />
+                          </button>
+                        </div>
                       </td>
                     )}
                     {visibleColumns.composer && <td className="hidden md:table-cell px-6 py-4 text-sm text-slate-500">{sheet.composer}</td>}
