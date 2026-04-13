@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Home, LayoutDashboard, ShieldAlert, Music, Upload, Info, Download, X, Smartphone, LogIn } from 'lucide-react';
+import { Home, LayoutDashboard, ShieldAlert, Music, Upload, Info, Download, X, Smartphone, LogIn, BookOpen } from 'lucide-react';
 import Navbar from './components/Navbar';
 import LandingPage from './components/LandingPage';
 import Dashboard from './components/Dashboard';
@@ -10,6 +10,9 @@ import UploadModal from './components/UploadModal';
 import AuthModal from './components/AuthModal';
 import FullPreviewPage from './components/FullPreviewPage';
 import ProfilePage from './components/ProfilePage';
+import CollectionsPage from './components/CollectionsPage';
+import OnboardingTour from './components/OnboardingTour';
+import { useKeyboardShortcuts, ShortcutsOverlay } from './components/KeyboardShortcuts';
 import { View, MusicSheet } from './types';
 import { supabase, auth, db } from './supabase';
 
@@ -22,19 +25,22 @@ const App: React.FC = () => {
   const [activePreview, setActivePreview] = useState<MusicSheet | null>(null);
   const [sheets, setSheets] = useState<MusicSheet[]>([]);
   
-  const [currentUser, setCurrentUser] = useState<{ id: string; email: string; role: 'admin' | 'user'; emailVerified: boolean } | null>(null);
+  const [currentUser, setCurrentUser] = useState<{ id: string; email: string; role: 'admin' | 'user'; emailVerified: boolean; displayName?: string } | null>(null);
   const [userFavorites, setUserFavorites] = useState<string[]>([]);
   const [profileEmail, setProfileEmail] = useState<string>('');
+  const [showOnboarding, setShowOnboarding] = useState(() => !localStorage.getItem('solfa-onboarded'));
+  const [showShortcuts, setShowShortcuts] = useState(false);
   // Guards onAuthStateChange from firing before getSession() resolves.
   const authReadyRef = useRef(false);
   // Tracks the last sheet query key to skip redundant re-fetches.
   const lastQueryKeyRef = useRef<string>('');
 
 
-  // Deep linking logic: Check for sheet ID in URL on mount
+  // Deep linking logic: Check for sheet/collection ID in URL on mount
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const sheetId = params.get('sheet');
+    const collectionId = params.get('collection');
     if (sheetId) {
       const fetchDeepLinkedSheet = async () => {
         try {
@@ -43,7 +49,7 @@ const App: React.FC = () => {
             .select('*')
             .eq('id', sheetId)
             .single();
-          
+
           if (data && !error) {
             // Apply the same snake_case → camelCase mapping as fetchSheets
             const mappedSheet: MusicSheet = {
@@ -63,6 +69,9 @@ const App: React.FC = () => {
         }
       };
       fetchDeepLinkedSheet();
+    }
+    if (collectionId) {
+      setCurrentView('collections');
     }
   }, []);
 
@@ -160,7 +169,7 @@ const App: React.FC = () => {
     try {
       const { data: profile } = await db
         .from('profiles')
-        .select('role')
+        .select('role, display_name')
         .eq('id', user.id)
         .maybeSingle();
       setCurrentUser({
@@ -168,6 +177,7 @@ const App: React.FC = () => {
         email: user.email,
         role: (profile?.role ?? (user.email === 'solfasanctuary@gmail.com' ? 'admin' : 'user')) as 'admin' | 'user',
         emailVerified: !!user.email_confirmed_at,
+        displayName: profile?.display_name ?? undefined,
       });
       fetchUserFavorites(user.id);
     } catch {
@@ -254,6 +264,27 @@ const App: React.FC = () => {
     }
   }, [currentUser, currentView]);
 
+  // ─── Keyboard shortcuts ──────────────────────────────────────────────────────
+  const { showOverlay: shortcutsFromHook, setShowOverlay: setShortcutsFromHook } = useKeyboardShortcuts({
+    onEscape: () => {
+      setActivePreview(null);
+      setIsAuthModalOpen(false);
+      setIsUploadModalOpen(false);
+    },
+    focusSearch: () => {
+      (document.querySelector('input[placeholder*="Search"]') as HTMLInputElement | null)?.focus();
+    },
+    previewOpen: !!activePreview,
+  });
+
+  // Merge hook-internal overlay state with the external showShortcuts state
+  const isShortcutsOpen = showShortcuts || shortcutsFromHook;
+  const handleCloseShortcuts = () => {
+    setShowShortcuts(false);
+    setShortcutsFromHook(false);
+  };
+  // ─────────────────────────────────────────────────────────────────────────────
+
   const renderView = () => {
     switch (currentView) {
       case 'home':
@@ -315,6 +346,15 @@ const App: React.FC = () => {
         ) : null;
       case 'about':
         return <AboutPage darkMode={darkMode} />;
+      case 'collections':
+        return currentUser ? (
+          <CollectionsPage
+            darkMode={darkMode}
+            currentUserId={currentUser.id}
+            currentUserEmail={currentUser.email}
+            onPreview={handlePreview}
+          />
+        ) : null;
       case 'profile':
         return (
           <ProfilePage
@@ -358,20 +398,26 @@ const App: React.FC = () => {
           isLoggedIn={!!currentUser}
           onAuthRequired={() => setIsAuthModalOpen(true)}
           currentUserId={currentUser?.id}
+          currentUserEmail={currentUser?.email}
+          currentUserDisplayName={currentUser?.displayName ?? undefined}
           userFavorites={userFavorites}
           onFavoritesChange={setUserFavorites}
           onViewProfile={handleViewProfile}
+          sheets={sheets}
+          onPreview={handlePreview}
+          onNavigateCollections={() => { setCurrentView('collections'); setActivePreview(null); }}
         />
       ) : (
         <>
-          <Navbar 
-            activeView={currentView} 
-            onViewChange={(view) => { setCurrentView(view); setActivePreview(null); }} 
+          <Navbar
+            activeView={currentView}
+            onViewChange={(view) => { setCurrentView(view); setActivePreview(null); }}
             currentUser={currentUser}
             onLogout={handleLogout}
             onLogin={handleOpenLogin}
             darkMode={darkMode}
             onThemeToggle={toggleTheme}
+            onShowShortcuts={() => { setShowShortcuts(true); }}
           />
           
           <main className="max-w-7xl mx-auto px-4 pt-3 pb-12 lg:py-12 pb-24">
@@ -402,6 +448,9 @@ const App: React.FC = () => {
                 <button aria-label="Dashboard" onClick={() => { setCurrentView('dashboard'); setActivePreview(null); }} className={`p-3 rounded-xl transition-colors ${currentView === 'dashboard' ? 'text-green-500' : darkMode ? 'text-slate-500' : 'text-slate-400'}`}>
                   <LayoutDashboard size={24} />
                 </button>
+                <button aria-label="My Collections" onClick={() => { setCurrentView('collections'); setActivePreview(null); }} className={`p-3 rounded-xl transition-colors ${currentView === 'collections' ? 'text-green-500' : darkMode ? 'text-slate-500' : 'text-slate-400'}`}>
+                  <BookOpen size={24} />
+                </button>
                 {currentUser.role === 'admin' && (
                   <button aria-label="Admin dashboard" onClick={() => { setCurrentView('admin'); setActivePreview(null); }} className={`p-3 rounded-xl transition-colors ${currentView === 'admin' ? 'text-green-500' : darkMode ? 'text-slate-500' : 'text-slate-400'}`}>
                     <ShieldAlert size={24} />
@@ -422,11 +471,25 @@ const App: React.FC = () => {
         onSheetUploaded={(sheet) => setSheets(prev => [sheet, ...prev])}
       />
 
-      <AuthModal 
+      <AuthModal
         isOpen={isAuthModalOpen}
         onClose={() => setIsAuthModalOpen(false)}
         darkMode={darkMode}
       />
+
+      {showOnboarding && (
+        <OnboardingTour
+          onComplete={() => setShowOnboarding(false)}
+          darkMode={darkMode}
+        />
+      )}
+
+      {isShortcutsOpen && (
+        <ShortcutsOverlay
+          darkMode={darkMode}
+          onClose={handleCloseShortcuts}
+        />
+      )}
     </div>
   );
 };

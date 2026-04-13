@@ -1,6 +1,27 @@
 
-export type View = 'home' | 'library' | 'dashboard' | 'admin' | 'about' | 'profile';
+export type View = 'home' | 'library' | 'dashboard' | 'admin' | 'about' | 'profile' | 'collections';
 export type AdminTab = 'users' | 'content';
+
+export interface Comment {
+  id: string;
+  sheetId: string;
+  userId: string;
+  userEmail: string;
+  displayName: string | null;
+  body: string;
+  createdAt: string;
+}
+
+export interface Collection {
+  id: string;
+  userId: string;
+  userEmail: string;
+  name: string;
+  description: string | null;
+  isPublic: boolean;
+  createdAt: string;
+  sheetCount?: number;
+}
 
 export interface MusicSheet {
   id: string;

@@ -1,8 +1,8 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { Upload, Music, Eye, Download, Search, List, Grid, MoreVertical, Edit2, Trash2, FileText, ArrowUp, ArrowDown, X, Check, Lock, ShieldAlert, Globe, AlertTriangle, Heart, BarChart2 } from 'lucide-react';
+import { Upload, Music, Eye, Download, Search, List, Grid, MoreVertical, Edit2, Trash2, FileText, ArrowUp, ArrowDown, X, Check, Lock, ShieldAlert, Globe, AlertTriangle, Heart, BarChart2, RefreshCw } from 'lucide-react';
 import { MusicSheet } from '../types';
-import { db } from '../supabase';
+import { db, storage } from '../supabase';
 
 interface DashboardProps {
   onUploadClick: () => void;
@@ -285,7 +285,11 @@ const Dashboard: React.FC<DashboardProps> = ({ onUploadClick, onPreview, darkMod
           title: data.title,
           composer: data.composer,
           type: data.type,
-          is_public: data.isPublic
+          is_public: data.isPublic,
+          // Only send file fields if they changed
+          ...(data.pdfUrl !== original?.pdfUrl ? { pdf_url: data.pdfUrl } : {}),
+          ...(data.thumbnailUrl !== original?.thumbnailUrl ? { thumbnail_url: data.thumbnailUrl } : {}),
+          ...(data.fileSize !== original?.fileSize ? { file_size: data.fileSize } : {}),
         })
         .eq('id', id);
       if (error) throw error;
@@ -716,6 +720,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onUploadClick, onPreview, darkMod
           onClose={() => setEditingSheet(null)}
           onSave={handleUpdateSheet}
           darkMode={darkMode}
+          userEmail={userEmail}
         />
       )}
 
@@ -834,10 +839,46 @@ interface EditSheetModalProps {
   onClose: () => void;
   onSave: (sheet: MusicSheet) => void;
   darkMode: boolean;
+  userEmail: string;
 }
 
-const EditSheetModal: React.FC<EditSheetModalProps> = ({ sheet, onClose, onSave, darkMode }) => {
+const generateThumbnailForEdit = async (pdfFile: File): Promise<Blob> => {
+  const arrayBuffer = await pdfFile.arrayBuffer();
+  const pdfjsLib = (window as any)['pdfjsLib'];
+  if (!pdfjsLib) throw new Error('PDF.js library not found.');
+  pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdn.jsdelivr.net/npm/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.js`;
+  const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+  const page = await pdf.getPage(1);
+  const scale = 0.7;
+  const viewport = page.getViewport({ scale });
+  const canvas = document.createElement('canvas');
+  const ctx = canvas.getContext('2d');
+  if (!ctx) throw new Error('Could not create canvas context');
+  canvas.height = viewport.height;
+  canvas.width = viewport.width;
+  await page.render({ canvasContext: ctx, viewport }).promise;
+  await new Promise(r => setTimeout(r, 0));
+  return new Promise((resolve, reject) => {
+    canvas.toBlob(blob => blob ? resolve(blob) : reject(new Error('Thumbnail generation failed')), 'image/jpeg', 0.75);
+  });
+};
+
+const formatFileSizeEdit = (bytes: number) => {
+  if (bytes === 0) return '0 Bytes';
+  const k = 1024;
+  const sizes = ['Bytes', 'KB', 'MB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+};
+
+const EditSheetModal: React.FC<EditSheetModalProps> = ({ sheet, onClose, onSave, darkMode, userEmail }) => {
   const [formData, setFormData] = useState<MusicSheet>({ ...sheet });
+  const [replaceFile, setReplaceFile] = useState<File | null>(null);
+  const [showFileInput, setShowFileInput] = useState(false);
+  const [fileError, setFileError] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const [uploadStatus, setUploadStatus] = useState('');
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const overlayRef = useRef<HTMLDivElement>(null);
   const modalRef = useRef<HTMLDivElement>(null);
   const previousFocusRef = useRef<HTMLElement | null>(null);
@@ -872,15 +913,71 @@ const EditSheetModal: React.FC<EditSheetModalProps> = ({ sheet, onClose, onSave,
   const textSecondary = darkMode ? 'text-slate-400' : 'text-slate-600';
   const inputBg = darkMode ? 'bg-slate-950 border-slate-800' : 'bg-slate-50 border-slate-200';
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0];
+    if (!f) return;
+    if (f.type !== 'application/pdf') { setFileError('Please select a valid PDF file.'); return; }
+    if (f.size > 10 * 1024 * 1024) { setFileError('File is too large. Maximum allowed size is 10 MB.'); return; }
+    setFileError(null);
+    setReplaceFile(f);
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    onSave(formData);
+    if (!replaceFile) {
+      onSave(formData);
+      return;
+    }
+
+    setUploading(true);
+    try {
+      setUploadStatus('Generating thumbnail…');
+      const thumbnailBlob = await generateThumbnailForEdit(replaceFile);
+
+      const timestamp = Date.now();
+      const fileName = `${timestamp}_${replaceFile.name}`;
+
+      setUploadStatus('Uploading PDF…');
+      const { error: pdfError } = await storage
+        .from('sheets')
+        .upload(`${userEmail}/${fileName}`, replaceFile, { contentType: 'application/pdf', upsert: true });
+      if (pdfError) throw pdfError;
+
+      const { data: { publicUrl: pdfUrl } } = storage
+        .from('sheets')
+        .getPublicUrl(`${userEmail}/${fileName}`);
+
+      setUploadStatus('Uploading thumbnail…');
+      const thumbName = `${timestamp}_thumb.jpg`;
+      const { error: thumbError } = await storage
+        .from('thumbnails')
+        .upload(`${userEmail}/${thumbName}`, thumbnailBlob, { contentType: 'image/jpeg', upsert: true });
+      if (thumbError) throw thumbError;
+
+      const { data: { publicUrl: thumbnailUrl } } = storage
+        .from('thumbnails')
+        .getPublicUrl(`${userEmail}/${thumbName}`);
+
+      setUploadStatus('Saving…');
+      onSave({
+        ...formData,
+        pdfUrl,
+        thumbnailUrl,
+        fileSize: formatFileSizeEdit(replaceFile.size),
+      });
+    } catch (err: any) {
+      console.error('Re-upload error:', err);
+      alert('File upload failed: ' + (err.message || 'Unknown error'));
+    } finally {
+      setUploading(false);
+      setUploadStatus('');
+    }
   };
 
   return (
-    <div 
+    <div
       ref={overlayRef}
-      onClick={(e) => e.target === overlayRef.current && onClose()}
+      onClick={(e) => e.target === overlayRef.current && !uploading && onClose()}
       className="fixed inset-0 z-[200] flex items-center justify-center px-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200"
     >
       <div ref={modalRef} className={`w-full max-w-xl rounded-2xl overflow-hidden border animate-in zoom-in-95 duration-200 ${bgClass}`}>
@@ -894,7 +991,7 @@ const EditSheetModal: React.FC<EditSheetModalProps> = ({ sheet, onClose, onSave,
               <p className={`text-sm ${textSecondary}`}>Update the details for this piece in the sanctuary.</p>
             </div>
           </div>
-          <button type="button" onClick={onClose} aria-label="Close edit modal" className="text-slate-400 hover:text-green-500 transition-colors">
+          <button type="button" onClick={onClose} disabled={uploading} aria-label="Close edit modal" className="text-slate-400 hover:text-green-500 transition-colors disabled:opacity-50">
             <X size={20} />
           </button>
         </div>
@@ -902,8 +999,8 @@ const EditSheetModal: React.FC<EditSheetModalProps> = ({ sheet, onClose, onSave,
         <form className="p-6 space-y-6" onSubmit={handleSubmit}>
           <div className="space-y-2">
             <label className={`text-sm font-medium ${darkMode ? 'text-slate-300' : 'text-slate-700'}`}>Title</label>
-            <input 
-              type="text" 
+            <input
+              type="text"
               required
               value={formData.title}
               onChange={(e) => setFormData({ ...formData, title: e.target.value })}
@@ -913,8 +1010,8 @@ const EditSheetModal: React.FC<EditSheetModalProps> = ({ sheet, onClose, onSave,
 
           <div className="space-y-2">
             <label className={`text-sm font-medium ${darkMode ? 'text-slate-300' : 'text-slate-700'}`}>Composed by</label>
-            <input 
-              type="text" 
+            <input
+              type="text"
               required
               value={formData.composer}
               onChange={(e) => setFormData({ ...formData, composer: e.target.value })}
@@ -924,7 +1021,7 @@ const EditSheetModal: React.FC<EditSheetModalProps> = ({ sheet, onClose, onSave,
 
           <div className="space-y-2">
             <label className={`text-sm font-medium ${darkMode ? 'text-slate-300' : 'text-slate-700'}`}>Music Type</label>
-            <select 
+            <select
               value={formData.type.toLowerCase()}
               onChange={(e) => setFormData({ ...formData, type: e.target.value.charAt(0).toUpperCase() + e.target.value.slice(1) })}
               className={`w-full rounded-lg px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-green-500/20 focus:border-green-500 transition-all appearance-none cursor-pointer ${inputBg} ${darkMode ? 'text-white' : 'text-black'}`}
@@ -938,21 +1035,59 @@ const EditSheetModal: React.FC<EditSheetModalProps> = ({ sheet, onClose, onSave,
 
           <div className="space-y-2">
             <label className={`text-sm font-medium ${darkMode ? 'text-slate-300' : 'text-slate-700'}`}>Sheet Music File</label>
-            <div 
-              className={`border-2 border-dashed rounded-lg p-8 flex flex-col items-center justify-center gap-2 transition-colors cursor-not-allowed border-green-500/50 bg-green-500/5 ${darkMode ? 'border-slate-800' : 'border-slate-200'}`}
-            >
-              <div className={`w-12 h-12 rounded-xl flex items-center justify-center transition-colors ${darkMode ? 'bg-slate-900' : 'bg-slate-50'}`}>
-                <Check className="text-green-500" size={24} />
+            {!showFileInput && !replaceFile ? (
+              <div className={`rounded-lg p-4 border flex items-center justify-between gap-4 ${darkMode ? 'bg-slate-950 border-slate-800' : 'bg-slate-50 border-slate-200'}`}>
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${darkMode ? 'bg-slate-900' : 'bg-white border border-slate-200'}`}>
+                    <Check className="text-green-500" size={18} />
+                  </div>
+                  <div className="min-w-0">
+                    <p className={`text-sm font-medium truncate ${darkMode ? 'text-slate-200' : 'text-slate-800'}`}>{formData.title}.pdf</p>
+                    <p className="text-xs text-slate-500">{formData.fileSize} · exists on server</p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowFileInput(true)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg border transition-colors shrink-0 text-green-500 border-green-500/30 hover:bg-green-500/10"
+                >
+                  <RefreshCw size={13} /> Replace file
+                </button>
               </div>
-              <p className={`text-sm ${textSecondary}`}>
-                <span className={`font-medium ${darkMode ? 'text-slate-200' : 'text-slate-800'}`}>
-                  {formData.title}.pdf
-                </span>
-              </p>
-              <p className="text-xs text-slate-500">
-                {formData.fileSize} • File exists on server
-              </p>
-            </div>
+            ) : replaceFile ? (
+              <div className={`rounded-lg p-4 border flex items-center justify-between gap-4 ${darkMode ? 'bg-green-500/5 border-green-500/30' : 'bg-green-50 border-green-200'}`}>
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="w-9 h-9 rounded-lg bg-green-500/10 flex items-center justify-center shrink-0">
+                    <FileText className="text-green-500" size={18} />
+                  </div>
+                  <div className="min-w-0">
+                    <p className={`text-sm font-medium truncate ${textPrimary}`}>{replaceFile.name}</p>
+                    <p className="text-xs text-slate-500">{formatFileSizeEdit(replaceFile.size)} · new file selected</p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => { setReplaceFile(null); setShowFileInput(false); if (fileInputRef.current) fileInputRef.current.value = ''; }}
+                  className="p-1.5 text-slate-400 hover:text-red-500 transition-colors"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="application/pdf"
+                  onChange={handleFileChange}
+                  className={`w-full text-sm file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:font-bold file:bg-green-500/10 file:text-green-500 hover:file:bg-green-500/20 transition-all cursor-pointer ${textSecondary}`}
+                />
+                <button type="button" onClick={() => setShowFileInput(false)} className={`text-xs ${textSecondary} hover:text-green-500 transition-colors`}>
+                  Cancel replacement
+                </button>
+                {fileError && <p className="text-xs text-red-500">{fileError}</p>}
+              </div>
+            )}
           </div>
 
           <div className={`p-4 rounded-xl border flex items-center justify-between ${darkMode ? 'bg-slate-950 border-slate-800' : 'bg-slate-50 border-slate-200 shadow-inner'}`}>
@@ -961,9 +1096,9 @@ const EditSheetModal: React.FC<EditSheetModalProps> = ({ sheet, onClose, onSave,
               <p className="text-xs text-slate-500">Allow anyone to view and download this sheet music.</p>
             </div>
             <label className="relative inline-flex items-center cursor-pointer">
-              <input 
-                type="checkbox" 
-                className="sr-only peer" 
+              <input
+                type="checkbox"
+                className="sr-only peer"
                 checked={formData.isPublic}
                 onChange={(e) => setFormData({ ...formData, isPublic: e.target.checked })}
               />
@@ -971,11 +1106,20 @@ const EditSheetModal: React.FC<EditSheetModalProps> = ({ sheet, onClose, onSave,
             </label>
           </div>
 
-          <button 
+          <button
             type="submit"
-            className="w-full py-3 bg-green-500 hover:bg-green-600 text-white font-bold rounded-xl transition-all shadow-lg active:scale-95 shadow-green-500/20 flex items-center justify-center gap-2"
+            disabled={uploading}
+            className="w-full py-3 bg-green-500 hover:bg-green-600 disabled:opacity-70 text-white font-bold rounded-xl transition-all shadow-lg active:scale-95 shadow-green-500/20 flex items-center justify-center gap-2"
           >
-            Save Changes
+            {uploading ? (
+              <>
+                <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                </svg>
+                {uploadStatus || 'Uploading…'}
+              </>
+            ) : 'Save Changes'}
           </button>
         </form>
       </div>

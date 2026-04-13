@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Home, Music, LayoutDashboard, ShieldAlert, Moon, Sun, User as UserIcon, LogOut, ChevronDown, LogIn, Info } from 'lucide-react';
+import { Home, Music, LayoutDashboard, ShieldAlert, Moon, Sun, User as UserIcon, LogOut, ChevronDown, LogIn, Info, BookOpen, Keyboard } from 'lucide-react';
 import { View } from '../types';
 
 interface NavbarProps {
@@ -11,9 +11,10 @@ interface NavbarProps {
   onLogin: () => void;
   darkMode: boolean;
   onThemeToggle: () => void;
+  onShowShortcuts?: () => void;
 }
 
-const Navbar: React.FC<NavbarProps> = ({ activeView, onViewChange, currentUser, onLogout, onLogin, darkMode, onThemeToggle }) => {
+const Navbar: React.FC<NavbarProps> = ({ activeView, onViewChange, currentUser, onLogout, onLogin, darkMode, onThemeToggle, onShowShortcuts }) => {
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -63,13 +64,24 @@ const Navbar: React.FC<NavbarProps> = ({ activeView, onViewChange, currentUser, 
             {currentUser && (
               <>
                 <NavItem id="dashboard" icon={LayoutDashboard} label="Dashboard" />
+                <NavItem id="collections" icon={BookOpen} label="Collections" />
                 {currentUser.role === 'admin' && <NavItem id="admin" icon={ShieldAlert} label="Admin" />}
               </>
             )}
           </div>
         </div>
 
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-2">
+          {onShowShortcuts && (
+            <button
+              onClick={onShowShortcuts}
+              aria-label="Keyboard shortcuts"
+              title="Keyboard shortcuts (?)"
+              className={`p-2 border rounded-lg transition-colors ${darkMode ? 'text-slate-400 hover:text-slate-100 border-slate-800 hover:bg-slate-900' : 'text-slate-500 hover:text-slate-900 border-slate-200 hover:bg-slate-50'}`}
+            >
+              <Keyboard size={18} />
+            </button>
+          )}
           <button
             onClick={onThemeToggle}
             aria-label={darkMode ? 'Switch to light mode' : 'Switch to dark mode'}
