@@ -5,6 +5,7 @@ import './index.css';
 import App from './App';
 import { Music, RefreshCw } from 'lucide-react';
 import * as Sentry from '@sentry/react';
+import { ThemeProvider } from './contexts/ThemeContext';
 
 // VITE_SENTRY_DSN= (add your DSN to .env to activate error tracking)
 Sentry.init({
@@ -81,6 +82,7 @@ const root = ReactDOM.createRoot(rootElement);
 // Instantiating ErrorBoundary - children prop made optional to fix Error on line 50
 root.render(
   <React.StrictMode>
+    <ThemeProvider>
     <Sentry.ErrorBoundary fallback={
       <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-6 text-center">
         <div className="w-24 h-24 bg-red-500/10 rounded-3xl flex items-center justify-center mb-8 border border-red-500/20">
@@ -103,5 +105,6 @@ root.render(
         <App />
       </ErrorBoundary>
     </Sentry.ErrorBoundary>
+    </ThemeProvider>
   </React.StrictMode>
 );

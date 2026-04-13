@@ -153,6 +153,24 @@ const SheetCard = memo(({ sheet, onPreview, activeMobileMenuId, setActiveMobileM
 type TypeFilter = 'All' | 'Classical' | 'Liturgical' | 'Choral' | 'Contemporary';
 type SortOption = 'newest' | 'views' | 'downloads' | 'az';
 
+const PAGE_SIZE = 24;
+
+const mapSheet = (s: Record<string, unknown>): MusicSheet => ({
+  id: s.id as string,
+  title: s.title as string,
+  composer: s.composer as string,
+  type: s.type as string,
+  uploadedAt: s.uploaded_at ? new Date(s.uploaded_at as string).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '',
+  fileSize: s.file_size as string,
+  views: (s.views as number) ?? 0,
+  downloads: (s.downloads as number) ?? 0,
+  isPublic: s.is_public as boolean,
+  isAdminRestricted: (s.is_admin_restricted as boolean) ?? false,
+  thumbnailUrl: s.thumbnail_url as string,
+  pdfUrl: s.pdf_url as string,
+  uploadedBy: s.uploaded_by as string,
+});
+
 const MusicLibrary: React.FC<MusicLibraryProps> = ({ darkMode, initialSearch = '', onPreview, sheets, currentUserId, userFavorites = [], onFavoritesChange, onAuthRequired, onViewProfile }) => {
   const [searchTerm, setSearchTerm] = useState(initialSearch);
   const [viewMode, setViewMode] = useState<'list' | 'grid'>('grid');
@@ -160,6 +178,10 @@ const MusicLibrary: React.FC<MusicLibraryProps> = ({ darkMode, initialSearch = '
   const [activeMobileMenuId, setActiveMobileMenuId] = useState<string | null>(null);
   const [typeFilter, setTypeFilter] = useState<TypeFilter>('All');
   const [sortOption, setSortOption] = useState<SortOption>('newest');
+  const [serverSheets, setServerSheets] = useState<MusicSheet[] | null>(null);
+  const [isSearching, setIsSearching] = useState(false);
+  const [page, setPage] = useState(1);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const handleToggleFavorite = async (sheet: MusicSheet) => {
     if (!currentUserId) { onAuthRequired?.(); return; }
@@ -190,6 +212,41 @@ const MusicLibrary: React.FC<MusicLibraryProps> = ({ darkMode, initialSearch = '
     setSearchTerm(initialSearch);
   }, [initialSearch]);
 
+  // Debounced server-side search
+  useEffect(() => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    if (searchTerm.length < 2) {
+      setServerSheets(null);
+      setIsSearching(false);
+      setPage(1);
+      return;
+    }
+    setIsSearching(true);
+    debounceRef.current = setTimeout(async () => {
+      const term = searchTerm;
+      try {
+        const { data } = await db
+          .from('sheets')
+          .select('*')
+          .eq('is_public', true)
+          .eq('is_admin_restricted', false)
+          .or(`title.ilike.%${term}%,composer.ilike.%${term}%`)
+          .order('uploaded_at', { ascending: false })
+          .limit(100);
+        setServerSheets((data || []).map(s => mapSheet(s as Record<string, unknown>)));
+        setPage(1);
+      } catch {
+        setServerSheets(null);
+      } finally {
+        setIsSearching(false);
+      }
+    }, 400);
+    return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
+  }, [searchTerm]);
+
+  // Reset page when filter/sort changes
+  useEffect(() => { setPage(1); }, [typeFilter, sortOption, sortConfig]);
+
   const handleSort = (key: keyof MusicSheet) => {
     let direction: 'asc' | 'desc' = 'asc';
     if (sortConfig && sortConfig.key === key && sortConfig.direction === 'asc') {
@@ -200,15 +257,20 @@ const MusicLibrary: React.FC<MusicLibraryProps> = ({ darkMode, initialSearch = '
 
   // Performance Optimization: Memoize filtering and sorting to prevent jank during searching
   const filteredSheets = useMemo(() => {
-    const publicSheets = sheets.filter(s => s.isPublic && !s.isAdminRestricted);
+    // Use server results when available, otherwise filter client-side
+    const baseSheets = serverSheets !== null
+      ? serverSheets
+      : sheets.filter(s => s.isPublic && !s.isAdminRestricted).filter(sheet => {
+          const matchesSearch = !searchTerm ||
+            sheet.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            sheet.composer.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            sheet.type.toLowerCase().includes(searchTerm.toLowerCase());
+          return matchesSearch;
+        });
 
-    let result = publicSheets.filter(sheet => {
-      const matchesSearch =
-        sheet.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        sheet.composer.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        sheet.type.toLowerCase().includes(searchTerm.toLowerCase());
+    let result = baseSheets.filter(sheet => {
       const matchesType = typeFilter === 'All' || sheet.type.toLowerCase() === typeFilter.toLowerCase();
-      return matchesSearch && matchesType;
+      return matchesType;
     });
 
     // Apply sort option (overrides column sort when set)
@@ -243,7 +305,9 @@ const MusicLibrary: React.FC<MusicLibraryProps> = ({ darkMode, initialSearch = '
     }
 
     return result;
-  }, [sheets, searchTerm, sortConfig, typeFilter, sortOption]);
+  }, [sheets, serverSheets, searchTerm, sortConfig, typeFilter, sortOption]);
+
+  const displayedSheets = filteredSheets.slice(0, page * PAGE_SIZE);
 
   const textPrimary = darkMode ? 'text-slate-100' : 'text-slate-900';
   const textSecondary = darkMode ? 'text-slate-400' : 'text-slate-600';
@@ -279,6 +343,17 @@ const MusicLibrary: React.FC<MusicLibraryProps> = ({ darkMode, initialSearch = '
           </div>
         </div>
       </div>
+
+      {/* Search status */}
+      {(isSearching || filteredSheets.length > 0) && (
+        <div className={`text-sm flex items-center gap-2 ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>
+          {isSearching ? (
+            <><div className="w-3.5 h-3.5 border-2 border-green-500 border-t-transparent rounded-full animate-spin" /> Searching…</>
+          ) : (
+            <span>Showing {displayedSheets.length} of {filteredSheets.length} sheet{filteredSheets.length !== 1 ? 's' : ''}</span>
+          )}
+        </div>
+      )}
 
       {/* Type filter pills + Sort dropdown */}
       <div className="flex flex-wrap items-center gap-3">
@@ -324,7 +399,7 @@ const MusicLibrary: React.FC<MusicLibraryProps> = ({ darkMode, initialSearch = '
                 Clear search
               </button>
             </div>
-          ) : filteredSheets.map(sheet => (
+          ) : displayedSheets.map(sheet => (
             <SheetCard
               key={sheet.id}
               sheet={sheet}
@@ -366,7 +441,7 @@ const MusicLibrary: React.FC<MusicLibraryProps> = ({ darkMode, initialSearch = '
                       </div>
                     </td>
                   </tr>
-                ) : filteredSheets.map((sheet) => (
+                ) : displayedSheets.map((sheet) => (
                   <tr key={sheet.id} className={`transition-colors ${darkMode ? 'hover:bg-slate-800/30' : 'hover:bg-slate-50'}`}>
                     {visibleColumns.title && (
                       <td className="px-4 md:px-6 py-4">
@@ -397,6 +472,21 @@ const MusicLibrary: React.FC<MusicLibraryProps> = ({ darkMode, initialSearch = '
               </tbody>
             </table>
           </div>
+        </div>
+      )}
+
+      {/* Load More */}
+      {filteredSheets.length > page * PAGE_SIZE && (
+        <div className="flex flex-col items-center gap-2 pt-4">
+          <button
+            onClick={() => setPage(p => p + 1)}
+            className="px-8 py-2.5 bg-green-500 hover:bg-green-600 text-white font-bold rounded-xl transition-all shadow-lg shadow-green-500/20 active:scale-95"
+          >
+            Load more sheets
+          </button>
+          <p className={`text-xs ${darkMode ? 'text-slate-500' : 'text-slate-400'}`}>
+            Showing {displayedSheets.length} of {filteredSheets.length}
+          </p>
         </div>
       )}
     </div>

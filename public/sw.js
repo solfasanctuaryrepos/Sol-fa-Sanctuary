@@ -1,58 +1,72 @@
-// Sol-fa Sanctuary Service Worker v5.1
-// Strategy: Bypass all app data and navigation. Only cache external CDN assets.
+// Sol-fa Sanctuary Service Worker v6
+// Strategy: App shell caching + SPA offline support + CDN fallback
 
-const CACHE_NAME = 'solfa-sanctuary-v5';
+const APP_SHELL_CACHE = 'solfa-app-shell-v6';
+const CDN_CACHE = 'solfa-cdn-v6';
 
-self.addEventListener('install', (event) => {
-  console.log('SW v5.1 installing...');
+self.addEventListener('install', event => {
   self.skipWaiting();
-});
-
-self.addEventListener('activate', (event) => {
-  console.log('SW v5.1 activating and cleaning old caches...');
   event.waitUntil(
-    caches.keys().then((cacheNames) => {
-      return Promise.all(
-        cacheNames
-          .filter((name) => name !== CACHE_NAME)
-          .map((name) => caches.delete(name))
-      );
-    }).then(() => self.clients.claim())
+    caches.open(APP_SHELL_CACHE).then(cache =>
+      cache.addAll(['/', '/index.html'])
+    )
   );
 });
 
-self.addEventListener('fetch', (event) => {
-  const url = new URL(event.request.url);
+self.addEventListener('activate', event => {
+  event.waitUntil(
+    caches.keys().then(names =>
+      Promise.all(
+        names
+          .filter(n => n !== APP_SHELL_CACHE && n !== CDN_CACHE)
+          .map(n => caches.delete(n))
+      )
+    ).then(() => self.clients.claim())
+  );
+});
 
-  // RULE 1: Never intercept non-GET or navigation
-  if (event.request.method !== 'GET' || event.request.mode === 'navigate') {
+self.addEventListener('fetch', event => {
+  const { request } = event;
+  const url = new URL(request.url);
+
+  // Never intercept non-GET
+  if (request.method !== 'GET') return;
+
+  // Never intercept Supabase
+  if (url.hostname.includes('supabase.co')) return;
+
+  // Navigation: serve index.html from cache (SPA offline support)
+  if (request.mode === 'navigate') {
+    event.respondWith(
+      caches.match('/index.html').then(cached => cached || fetch(request))
+    );
     return;
   }
 
-  // RULE 2: Never intercept Supabase or Localhost (Dev)
-  if (url.hostname.includes('supabase.co') || url.hostname === 'localhost') {
-    return;
-  }
-
-  // RULE 3: Never intercept same-origin assets (JS/CSS bundles)
+  // Same-origin assets (JS/CSS bundles): stale-while-revalidate
   if (url.origin === self.location.origin) {
+    event.respondWith(
+      caches.open(APP_SHELL_CACHE).then(async cache => {
+        const cached = await cache.match(request);
+        const networkFetch = fetch(request).then(response => {
+          if (response.ok) cache.put(request, response.clone());
+          return response;
+        }).catch(() => cached);
+        return cached || networkFetch;
+      })
+    );
     return;
   }
 
-  // RULE 4: For everything else (CDN scripts like PDF.js, Fonts, Images),
-  // use Network-First but FALLBACK to cache if offline.
+  // External CDN: network-first with cache fallback
   event.respondWith(
-    fetch(event.request)
-      .then((response) => {
-        // Only cache successful external responses
-        if (response.ok && url.origin !== self.location.origin) {
-          const responseClone = response.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, responseClone));
+    fetch(request)
+      .then(response => {
+        if (response.ok) {
+          caches.open(CDN_CACHE).then(cache => cache.put(request, response.clone()));
         }
         return response;
       })
-      .catch(() => {
-        return caches.match(event.request);
-      })
+      .catch(() => caches.match(request))
   );
 });

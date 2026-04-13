@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Home, LayoutDashboard, ShieldAlert, Music, Upload, Info, Download, X, Smartphone, LogIn, BookOpen } from 'lucide-react';
+import { Home, LayoutDashboard, ShieldAlert, Music, Upload, Info, Download, X, Smartphone, LogIn, BookOpen, HelpCircle } from 'lucide-react';
 import Navbar from './components/Navbar';
 import LandingPage from './components/LandingPage';
 import Dashboard from './components/Dashboard';
@@ -12,15 +12,40 @@ import FullPreviewPage from './components/FullPreviewPage';
 import ProfilePage from './components/ProfilePage';
 import CollectionsPage from './components/CollectionsPage';
 import OnboardingTour from './components/OnboardingTour';
+import UpdateBanner from './components/UpdateBanner';
+import HelpPage from './components/HelpPage';
 import { useKeyboardShortcuts, ShortcutsOverlay } from './components/KeyboardShortcuts';
 import { View, MusicSheet } from './types';
 import { supabase, auth, db } from './supabase';
+import { useTheme } from './contexts/ThemeContext';
+
+interface SupabaseUser {
+  id: string;
+  email?: string;
+  email_confirmed_at?: string | null;
+}
+
+interface RawSheetRow {
+  id: string;
+  title: string;
+  composer: string;
+  type: string;
+  uploaded_at: string | null;
+  file_size: string;
+  views: number;
+  downloads: number;
+  is_public: boolean;
+  is_admin_restricted: boolean;
+  thumbnail_url: string;
+  pdf_url: string;
+  uploaded_by: string;
+}
 
 const App: React.FC = () => {
+  const { darkMode, toggleTheme } = useTheme();
   const [currentView, setCurrentView] = useState<View>('home');
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
-  const [darkMode, setDarkMode] = useState(() => localStorage.getItem('solfa-theme') !== 'light');
   const [searchQuery, setSearchQuery] = useState('');
   const [activePreview, setActivePreview] = useState<MusicSheet | null>(null);
   const [sheets, setSheets] = useState<MusicSheet[]>([]);
@@ -87,7 +112,7 @@ const App: React.FC = () => {
   }, [activePreview]);
 
   // Converts a raw DB row to the MusicSheet shape the UI expects.
-  const mapSheet = (s: any): MusicSheet => ({
+  const mapSheet = (s: RawSheetRow): MusicSheet => ({
     ...s,
     uploadedAt: s.uploaded_at
       ? new Date(s.uploaded_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
@@ -157,14 +182,14 @@ const App: React.FC = () => {
         .from('favorites')
         .select('sheet_id')
         .eq('user_id', userId);
-      setUserFavorites((data || []).map((r: any) => r.sheet_id));
+      setUserFavorites((data || []).map((r: { sheet_id: string }) => r.sheet_id));
     } catch {
       setUserFavorites([]);
     }
   }, []);
 
   // Load role from profiles table, fall back to email-based heuristic.
-  const resolveUser = useCallback(async (user: any) => {
+  const resolveUser = useCallback(async (user: SupabaseUser | null) => {
     if (!user?.email) { setCurrentUser(null); setUserFavorites([]); return; }
     try {
       const { data: profile } = await db
@@ -239,11 +264,6 @@ const App: React.FC = () => {
     setProfileEmail(email);
     setCurrentView('profile');
     setActivePreview(null);
-  };
-
-  const toggleTheme = () => {
-    localStorage.setItem('solfa-theme', darkMode ? 'light' : 'dark');
-    setDarkMode(!darkMode);
   };
 
   const handleHomeSearch = (query: string) => {
@@ -346,6 +366,8 @@ const App: React.FC = () => {
         ) : null;
       case 'about':
         return <AboutPage darkMode={darkMode} />;
+      case 'help':
+        return <HelpPage darkMode={darkMode} />;
       case 'collections':
         return currentUser ? (
           <CollectionsPage
@@ -389,6 +411,7 @@ const App: React.FC = () => {
 
   return (
     <div className={`min-h-screen transition-colors duration-300 selection:bg-green-500/30 selection:text-green-200 font-sans ${themeClasses}`}>
+      <UpdateBanner darkMode={darkMode} />
       {activePreview ? (
         <FullPreviewPage
           sheet={activePreview}
@@ -434,6 +457,9 @@ const App: React.FC = () => {
             </button>
             <button aria-label="About" onClick={() => { setCurrentView('about'); setActivePreview(null); }} className={`p-3 rounded-xl transition-colors ${currentView === 'about' ? 'text-green-500' : darkMode ? 'text-slate-500' : 'text-slate-400'}`}>
               <Info size={24} />
+            </button>
+            <button aria-label="Help" onClick={() => { setCurrentView('help'); setActivePreview(null); }} className={`p-3 rounded-xl transition-colors ${currentView === 'help' ? 'text-green-500' : darkMode ? 'text-slate-500' : 'text-slate-400'}`}>
+              <HelpCircle size={24} />
             </button>
             {!currentUser && (
               <button aria-label="Sign In" onClick={handleOpenLogin} className={`p-3 rounded-xl transition-colors ${darkMode ? 'text-slate-500 hover:text-green-500' : 'text-slate-400 hover:text-green-600'}`}>
