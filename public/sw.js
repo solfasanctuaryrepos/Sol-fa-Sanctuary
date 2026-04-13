@@ -1,14 +1,22 @@
-// Sol-fa Sanctuary Service Worker v6
+// Sol-fa Sanctuary Service Worker v6.1
 // Strategy: App shell caching + SPA offline support + CDN fallback
 
 const APP_SHELL_CACHE = 'solfa-app-shell-v6';
 const CDN_CACHE = 'solfa-cdn-v6';
 
+// A guaranteed fallback Response so we never return undefined to the browser
+const offlineResponse = () => new Response('Offline — please check your connection.', {
+  status: 503,
+  headers: { 'Content-Type': 'text/plain' },
+});
+
 self.addEventListener('install', event => {
   self.skipWaiting();
   event.waitUntil(
     caches.open(APP_SHELL_CACHE).then(cache =>
-      cache.addAll(['/', '/index.html'])
+      cache.addAll(['/', '/index.html']).catch(() => {
+        // Non-fatal: cache may fail on first install if offline
+      })
     )
   );
 });
@@ -32,33 +40,39 @@ self.addEventListener('fetch', event => {
   // Never intercept non-GET
   if (request.method !== 'GET') return;
 
-  // Never intercept Supabase
+  // Never intercept Supabase API calls
   if (url.hostname.includes('supabase.co')) return;
 
-  // Navigation: serve index.html from cache (SPA offline support)
+  // Navigation requests: serve index.html from cache for SPA offline support
   if (request.mode === 'navigate') {
     event.respondWith(
-      caches.match('/index.html').then(cached => cached || fetch(request))
-    );
-    return;
-  }
-
-  // Same-origin assets (JS/CSS bundles): stale-while-revalidate
-  if (url.origin === self.location.origin) {
-    event.respondWith(
-      caches.open(APP_SHELL_CACHE).then(async cache => {
-        const cached = await cache.match(request);
-        const networkFetch = fetch(request).then(response => {
-          if (response.ok) cache.put(request, response.clone());
-          return response;
-        }).catch(() => cached);
-        return cached || networkFetch;
+      caches.match('/index.html').then(cached => {
+        if (cached) return cached;
+        return fetch(request).catch(() => offlineResponse());
       })
     );
     return;
   }
 
-  // External CDN: network-first with cache fallback
+  // Same-origin assets (JS/CSS/images): stale-while-revalidate
+  if (url.origin === self.location.origin) {
+    event.respondWith(
+      caches.open(APP_SHELL_CACHE).then(async cache => {
+        const cached = await cache.match(request);
+        // Always attempt a network update in the background
+        const networkPromise = fetch(request).then(response => {
+          if (response.ok) cache.put(request, response.clone());
+          return response;
+        }).catch(() => null); // null = network failed, handled below
+        // Return cache immediately if available, otherwise wait for network
+        if (cached) return cached;
+        return networkPromise.then(res => res || offlineResponse());
+      })
+    );
+    return;
+  }
+
+  // External CDN (PDF.js, fonts, etc): network-first with cache fallback
   event.respondWith(
     fetch(request)
       .then(response => {
@@ -67,6 +81,8 @@ self.addEventListener('fetch', event => {
         }
         return response;
       })
-      .catch(() => caches.match(request))
+      .catch(() =>
+        caches.match(request).then(cached => cached || offlineResponse())
+      )
   );
 });
