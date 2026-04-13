@@ -1,7 +1,8 @@
 
 import React, { useState } from 'react';
-import { Upload, Search, Shield, Share2, ArrowRight, Eye, Download, LogIn, Music } from 'lucide-react';
+import { Upload, Search, Shield, Share2, ArrowRight, Eye, Download, LogIn, Music, Heart } from 'lucide-react';
 import { MusicSheet } from '../types';
+import { db } from '../supabase';
 
 interface LandingPageProps {
   onUploadClick: () => void;
@@ -11,10 +12,40 @@ interface LandingPageProps {
   isLoggedIn: boolean;
   darkMode: boolean;
   sheets: MusicSheet[];
+  currentUserId?: string;
+  userFavorites?: string[];
+  onFavoritesChange?: (favs: string[]) => void;
+  onAuthRequired?: () => void;
+  onViewProfile?: (email: string) => void;
 }
 
-const LandingPage: React.FC<LandingPageProps> = ({ onUploadClick, onBrowseClick, onSearch, onPreview, isLoggedIn, darkMode, sheets }) => {
+const ONE_WEEK_MS = 7 * 24 * 60 * 60 * 1000;
+function isNewThisWeek(uploadedAt: string): boolean {
+  try {
+    const d = new Date(uploadedAt);
+    return !isNaN(d.getTime()) && Date.now() - d.getTime() < ONE_WEEK_MS;
+  } catch { return false; }
+}
+
+const LandingPage: React.FC<LandingPageProps> = ({ onUploadClick, onBrowseClick, onSearch, onPreview, isLoggedIn, darkMode, sheets, currentUserId, userFavorites = [], onFavoritesChange, onAuthRequired }) => {
   const [localSearch, setLocalSearch] = useState('');
+
+  const handleToggleFavorite = async (e: React.MouseEvent, sheet: MusicSheet) => {
+    e.stopPropagation();
+    if (!currentUserId) { onAuthRequired?.(); return; }
+    const wasFav = userFavorites.includes(sheet.id);
+    const newFavs = wasFav ? userFavorites.filter(id => id !== sheet.id) : [...userFavorites, sheet.id];
+    onFavoritesChange?.(newFavs);
+    try {
+      if (wasFav) {
+        await db.from('favorites').delete().eq('user_id', currentUserId).eq('sheet_id', sheet.id);
+      } else {
+        await db.from('favorites').insert({ user_id: currentUserId, sheet_id: sheet.id });
+      }
+    } catch {
+      onFavoritesChange?.(userFavorites); // rollback
+    }
+  };
 
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -113,13 +144,25 @@ const LandingPage: React.FC<LandingPageProps> = ({ onUploadClick, onBrowseClick,
 
         <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
           {publicSheets.length > 0 ? publicSheets.map(sheet => (
-            <div 
-              key={sheet.id} 
+            <div
+              key={sheet.id}
               className={`border rounded-2xl overflow-hidden group hover:border-green-500/50 transition-all flex flex-col cursor-pointer ${bgCardClass}`}
               onClick={() => onPreview(sheet)}
             >
               <div className="aspect-[3/4] overflow-hidden relative">
                 <img src={sheet.thumbnailUrl} alt={sheet.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+                {isNewThisWeek(sheet.uploadedAt) && (
+                  <div className="absolute top-2 left-2 pointer-events-none z-10">
+                    <span className="bg-green-500 text-white text-[9px] font-bold uppercase px-1.5 py-0.5 rounded">NEW</span>
+                  </div>
+                )}
+                <button
+                  onClick={(e) => handleToggleFavorite(e, sheet)}
+                  aria-label={userFavorites.includes(sheet.id) ? 'Remove from favourites' : 'Add to favourites'}
+                  className={`absolute top-2 right-2 z-10 p-1.5 rounded-full backdrop-blur-sm transition-all ${userFavorites.includes(sheet.id) ? 'bg-rose-500 text-white' : 'bg-black/40 text-white/70 hover:text-rose-400'}`}
+                >
+                  <Heart size={14} className={userFavorites.includes(sheet.id) ? 'fill-current' : ''} />
+                </button>
                 <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                   <div className="bg-white text-slate-900 px-4 py-2 rounded-xl font-bold text-sm shadow-xl flex items-center gap-2">
                     <Eye size={16} /> Preview

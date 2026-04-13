@@ -1,6 +1,6 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { Upload, Music, Eye, Download, Search, List, Grid, MoreVertical, Edit2, Trash2, FileText, ArrowUp, ArrowDown, X, Check, Lock, ShieldAlert, Globe, AlertTriangle } from 'lucide-react';
+import { Upload, Music, Eye, Download, Search, List, Grid, MoreVertical, Edit2, Trash2, FileText, ArrowUp, ArrowDown, X, Check, Lock, ShieldAlert, Globe, AlertTriangle, Heart, BarChart2 } from 'lucide-react';
 import { MusicSheet } from '../types';
 import { db } from '../supabase';
 
@@ -10,21 +10,133 @@ interface DashboardProps {
   darkMode: boolean;
   sheets: MusicSheet[];
   userEmail: string;
+  userId: string;
   /** Called immediately after a successful delete so the item disappears without waiting for realtime. */
   onSheetDeleted: (id: string) => void;
   /** Called with the new sheet object after an update so the item reflects changes without waiting for realtime. */
   onSheetUpdated: (updated: MusicSheet) => void;
+  userFavorites?: string[];
+  onFavoritesChange?: (favs: string[]) => void;
 }
 
 type SortConfig = { key: keyof MusicSheet; direction: 'asc' | 'desc' } | null;
+type DashTab = 'mine' | 'favourites';
 
-const Dashboard: React.FC<DashboardProps> = ({ onUploadClick, onPreview, darkMode, sheets, userEmail, onSheetDeleted, onSheetUpdated }) => {
+// ── Analytics panel ───────────────────────────────────────────────────────────
+interface DayData { views: number; downloads: number; label: string; }
+
+const AnalyticsPanel: React.FC<{ sheet: MusicSheet; darkMode: boolean; onClose: () => void }> = ({ sheet, darkMode, onClose }) => {
+  const [days, setDays] = useState<DayData[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    setLoading(true);
+    const since = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString();
+    const fetchData = async () => {
+      try {
+        const { data } = await db.from('interactions')
+          .select('type, created_at')
+          .eq('sheet_id', sheet.id)
+          .gte('created_at', since);
+        // Build 14-day buckets
+        const buckets: Record<string, DayData> = {};
+        for (let i = 13; i >= 0; i--) {
+          const d = new Date(Date.now() - i * 24 * 60 * 60 * 1000);
+          const key = d.toISOString().slice(0, 10);
+          const label = d.toLocaleDateString('en-US', { weekday: 'short' }).slice(0, 3);
+          buckets[key] = { views: 0, downloads: 0, label };
+        }
+        (data || []).forEach((row: any) => {
+          const key = row.created_at.slice(0, 10);
+          if (buckets[key]) {
+            if (row.type === 'views') buckets[key].views++;
+            else buckets[key].downloads++;
+          }
+        });
+        setDays(Object.values(buckets));
+      } catch {
+        // silent
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchData();
+  }, [sheet.id]);
+
+  const maxVal = Math.max(1, ...days.map(d => d.views + d.downloads));
+  const textPrimary = darkMode ? 'text-slate-100' : 'text-slate-900';
+  const textSecondary = darkMode ? 'text-slate-400' : 'text-slate-600';
+  const panelBg = darkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200 shadow-sm';
+
+  const hasData = days.some(d => d.views > 0 || d.downloads > 0);
+
+  return (
+    <div className={`mt-4 rounded-2xl border p-6 ${panelBg} animate-in slide-in-from-top-2 duration-200`}>
+      <div className="flex items-start justify-between mb-4">
+        <div>
+          <h3 className={`font-bold text-lg ${textPrimary}`}>{sheet.title}</h3>
+          <p className={`text-sm ${textSecondary}`}>{sheet.composer} — Last 14 days</p>
+        </div>
+        <button onClick={onClose} className={`p-1.5 rounded-lg transition-colors ${darkMode ? 'text-slate-500 hover:text-white' : 'text-slate-400 hover:text-slate-900'}`}>
+          <X size={18} />
+        </button>
+      </div>
+
+      <div className="flex gap-6 mb-6">
+        <div className="flex items-center gap-2 text-sm">
+          <div className="w-3 h-3 rounded-sm bg-blue-500"></div>
+          <span className={textSecondary}>Views: <span className={`font-bold ${textPrimary}`}>{sheet.views}</span></span>
+        </div>
+        <div className="flex items-center gap-2 text-sm">
+          <div className="w-3 h-3 rounded-sm bg-green-500"></div>
+          <span className={textSecondary}>Downloads: <span className={`font-bold ${textPrimary}`}>{sheet.downloads}</span></span>
+        </div>
+      </div>
+
+      {loading ? (
+        <div className="h-24 flex items-center justify-center">
+          <div className="w-6 h-6 border-2 border-green-500 border-t-transparent rounded-full animate-spin" />
+        </div>
+      ) : !hasData ? (
+        <p className={`text-center py-8 text-sm ${textSecondary}`}>No interaction data yet.</p>
+      ) : (
+        <div className="flex items-end gap-1 h-24 overflow-x-auto pb-1">
+          {days.map((day, i) => (
+            <div key={i} className="flex flex-col items-center gap-0.5 flex-1 min-w-[28px]">
+              <div className="flex items-end gap-px w-full h-20">
+                <div
+                  className="flex-1 bg-blue-500 rounded-t transition-all duration-300"
+                  style={{ height: `${(day.views / maxVal) * 100}%`, minHeight: day.views > 0 ? '3px' : '0' }}
+                  title={`Views: ${day.views}`}
+                />
+                <div
+                  className="flex-1 bg-green-500 rounded-t transition-all duration-300"
+                  style={{ height: `${(day.downloads / maxVal) * 100}%`, minHeight: day.downloads > 0 ? '3px' : '0' }}
+                  title={`Downloads: ${day.downloads}`}
+                />
+              </div>
+              <span className={`text-[8px] ${textSecondary}`}>{day.label}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+// ─────────────────────────────────────────────────────────────────────────────
+
+const Dashboard: React.FC<DashboardProps> = ({ onUploadClick, onPreview, darkMode, sheets, userEmail, userId, onSheetDeleted, onSheetUpdated, userFavorites = [], onFavoritesChange }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [viewMode, setViewMode] = useState<'list' | 'grid'>('grid');
   const [sortConfig, setSortConfig] = useState<SortConfig>(null);
   const [activeMobileMenuId, setActiveMobileMenuId] = useState<string | null>(null);
-  
+  const [activeTab, setActiveTab] = useState<DashTab>('mine');
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [batchDeleteConfirm, setBatchDeleteConfirm] = useState(false);
+  const [selectedSheetForAnalytics, setSelectedSheetForAnalytics] = useState<MusicSheet | null>(null);
+
   const userSheets = sheets.filter(sheet => sheet.uploadedBy === userEmail);
+  const favoriteSheets = sheets.filter(s => userFavorites.includes(s.id) && s.isPublic && !s.isAdminRestricted);
   const [editingSheet, setEditingSheet] = useState<MusicSheet | null>(null);
   const [deleteConfirmation, setDeleteConfirmation] = useState<{
     id: string;
@@ -66,10 +178,47 @@ const Dashboard: React.FC<DashboardProps> = ({ onUploadClick, onPreview, darkMod
     return 0;
   });
 
-  const filteredSheets = sortedSheets.filter(sheet => 
+  const filteredSheets = sortedSheets.filter(sheet =>
     sheet.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
     sheet.composer.toLowerCase().includes(searchTerm.toLowerCase())
   );
+
+  // ── Batch operations ────────────────────────────────────────────────────────
+  const toggleSelect = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  const batchUpdateVisibility = async (isPublic: boolean) => {
+    const ids = [...selectedIds];
+    ids.forEach(id => {
+      const sheet = userSheets.find(s => s.id === id);
+      if (sheet) onSheetUpdated({ ...sheet, isPublic });
+    });
+    setSelectedIds(new Set());
+    try {
+      await db.from('sheets').update({ is_public: isPublic }).in('id', ids);
+    } catch (err) {
+      console.error('Batch visibility error:', err);
+    }
+  };
+
+  const executeBatchDelete = async () => {
+    const ids = [...selectedIds];
+    setBatchDeleteConfirm(false);
+    setSelectedIds(new Set());
+    ids.forEach(id => onSheetDeleted(id));
+    try {
+      await db.from('sheets').delete().in('id', ids);
+    } catch (err) {
+      console.error('Batch delete error:', err);
+    }
+  };
+  // ─────────────────────────────────────────────────────────────────────────────
 
   const handleDownload = (e: React.MouseEvent, sheet: MusicSheet) => {
     e.stopPropagation();
@@ -169,7 +318,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onUploadClick, onPreview, darkMod
           <h1 className={`text-3xl font-serif font-bold ${textPrimary}`}>Dashboard</h1>
           <p className={textSecondary}>Here's an overview of your music sanctuary.</p>
         </div>
-        <button 
+        <button
           onClick={onUploadClick}
           className="flex items-center justify-center gap-2 px-6 py-2.5 bg-green-500 hover:bg-green-600 text-white font-semibold rounded-lg transition-all shadow-lg active:scale-95 shadow-green-500/10"
         >
@@ -191,28 +340,84 @@ const Dashboard: React.FC<DashboardProps> = ({ onUploadClick, onPreview, darkMod
         ))}
       </div>
 
+      {/* Tab switcher: My Sheets / Favourites */}
+      <div className={`flex w-fit rounded-xl overflow-hidden border transition-colors p-1 ${darkMode ? 'bg-slate-900/50 border-slate-800' : 'bg-slate-200 border-slate-300'}`}>
+        <button
+          onClick={() => setActiveTab('mine')}
+          className={`px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-2 ${activeTab === 'mine' ? (darkMode ? 'bg-slate-800 text-slate-100 shadow-lg' : 'bg-white text-slate-900 shadow-sm') : (darkMode ? 'text-slate-500 hover:text-slate-300' : 'text-slate-600 hover:text-slate-800')}`}
+        >
+          <Music size={15} /> My Sheets
+        </button>
+        <button
+          onClick={() => setActiveTab('favourites')}
+          className={`px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-2 ${activeTab === 'favourites' ? (darkMode ? 'bg-slate-800 text-slate-100 shadow-lg' : 'bg-white text-slate-900 shadow-sm') : (darkMode ? 'text-slate-500 hover:text-slate-300' : 'text-slate-600 hover:text-slate-800')}`}
+        >
+          <Heart size={15} /> My Favourites <span className="text-[10px] font-bold ml-0.5">({favoriteSheets.length})</span>
+        </button>
+      </div>
+
+      {/* Favourites tab */}
+      {activeTab === 'favourites' && (
+        <div className="space-y-4">
+          {favoriteSheets.length === 0 ? (
+            <div className={`py-16 text-center border-2 border-dashed rounded-2xl ${darkMode ? 'border-slate-800 text-slate-500' : 'border-slate-200 text-slate-400'}`}>
+              <Heart size={40} className="mx-auto mb-3 opacity-20" />
+              <p>No favourited sheets yet.</p>
+              <p className="text-xs mt-1">Tap the heart icon on any sheet to save it here.</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+              {favoriteSheets.map(sheet => (
+                <div key={sheet.id} className={`border rounded-2xl overflow-hidden group hover:border-green-500/50 transition-all flex flex-col ${cardBg}`}>
+                  <div className="aspect-[3/4] overflow-hidden relative cursor-pointer" onClick={() => onPreview(sheet)}>
+                    <img src={sheet.thumbnailUrl} alt={sheet.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                      <div className="bg-white text-slate-900 px-3 py-1.5 rounded-xl font-bold text-xs shadow-xl flex items-center gap-1.5">
+                        <Eye size={14} /> Preview
+                      </div>
+                    </div>
+                  </div>
+                  <div className="p-4">
+                    <h3 className={`font-bold truncate mb-1 ${textPrimary}`}>{sheet.title}</h3>
+                    <div className={`flex items-center justify-between text-xs ${textSecondary}`}>
+                      <span>{sheet.composer}</span>
+                      <div className="flex items-center gap-3">
+                        <span className="flex items-center gap-1"><Eye size={12} /> {sheet.views}</span>
+                        <span className="flex items-center gap-1"><Download size={12} /> {sheet.downloads}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* My Sheets tab */}
+      {activeTab === 'mine' && (
       <div className="space-y-6">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <h2 className={`text-2xl font-serif font-bold ${textPrimary}`}>My Music Sheets</h2>
           <div className="flex items-center gap-2">
             <div className="relative flex-1 sm:flex-none">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={16} />
-              <input 
-                type="text" 
+              <input
+                type="text"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                placeholder="Filter by title..." 
+                placeholder="Filter by title..."
                 className={`border rounded-lg pl-10 pr-4 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-green-500 w-full sm:w-64 ${darkMode ? 'bg-slate-900 border-slate-800 text-slate-200' : 'bg-white border-slate-200 text-slate-800 shadow-sm'}`}
               />
             </div>
             <div className={`flex border rounded-lg overflow-hidden ${darkMode ? 'border-slate-800' : 'border-slate-200'}`}>
-              <button 
+              <button
                 onClick={() => setViewMode('list')}
                 className={`p-2 transition-colors ${viewMode === 'list' ? (darkMode ? 'bg-slate-800 text-slate-100' : 'bg-slate-100 text-slate-900') : (darkMode ? 'bg-slate-900 text-slate-400 hover:text-slate-100' : 'bg-white text-slate-400 hover:text-slate-900')}`}
               >
                 <List size={16} />
               </button>
-              <button 
+              <button
                 onClick={() => setViewMode('grid')}
                 className={`p-2 transition-colors ${viewMode === 'grid' ? (darkMode ? 'bg-slate-800 text-slate-100' : 'bg-slate-100 text-slate-900') : (darkMode ? 'bg-slate-900 text-slate-400 hover:text-slate-100' : 'bg-white text-slate-400 hover:text-slate-900')}`}
               >
@@ -225,11 +430,19 @@ const Dashboard: React.FC<DashboardProps> = ({ onUploadClick, onPreview, darkMod
         {viewMode === 'grid' ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
             {filteredSheets.length > 0 ? filteredSheets.map((sheet) => (
-              <div key={sheet.id} className={`border rounded-2xl overflow-hidden group hover:border-green-500/50 transition-all flex flex-col ${cardBg}`}>
-                <div 
+              <div key={sheet.id} className={`border rounded-2xl overflow-hidden group hover:border-green-500/50 transition-all flex flex-col ${selectedIds.has(sheet.id) ? 'ring-2 ring-green-500' : ''} ${cardBg}`}>
+                <div
                   className="aspect-[3/4] overflow-hidden relative cursor-pointer"
                   onClick={() => onPreview(sheet)}
                 >
+                  {/* Checkbox overlay */}
+                  <button
+                    onClick={(e) => toggleSelect(sheet.id, e)}
+                    aria-label="Select sheet"
+                    className={`absolute top-2 left-2 z-20 w-5 h-5 rounded border-2 flex items-center justify-center transition-all ${selectedIds.has(sheet.id) ? 'bg-green-500 border-green-500' : 'bg-black/40 border-white/50 opacity-0 group-hover:opacity-100'} ${selectedIds.size > 0 ? 'opacity-100' : ''}`}
+                  >
+                    {selectedIds.has(sheet.id) && <Check size={11} className="text-white" />}
+                  </button>
                   <img src={sheet.thumbnailUrl} alt={sheet.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
                   
                   {/* Badge moved to top-left to avoid overlap with menu dots on mobile */}
@@ -302,9 +515,17 @@ const Dashboard: React.FC<DashboardProps> = ({ onUploadClick, onPreview, darkMod
                   </h3>
                   <div className={`flex items-center justify-between text-xs ${textSecondary}`}>
                     <span>{sheet.composer}</span>
-                    <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-2 shrink-0">
                       <span className="flex items-center gap-1"><Eye size={12} /> {sheet.views}</span>
                       <span className="flex items-center gap-1"><Download size={12} /> {sheet.downloads}</span>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); setSelectedSheetForAnalytics(selectedSheetForAnalytics?.id === sheet.id ? null : sheet); }}
+                        aria-label="View analytics"
+                        className={`p-0.5 transition-colors ${selectedSheetForAnalytics?.id === sheet.id ? 'text-green-500' : 'hover:text-green-500'}`}
+                        title="Analytics"
+                      >
+                        <BarChart2 size={13} />
+                      </button>
                     </div>
                   </div>
                 </div>
@@ -322,6 +543,15 @@ const Dashboard: React.FC<DashboardProps> = ({ onUploadClick, onPreview, darkMod
               <table className="w-full text-left min-w-[600px] md:min-w-full">
                 <thead className={darkMode ? 'bg-slate-950/50' : 'bg-slate-50'}>
                   <tr className="text-slate-500 text-[10px] font-bold uppercase tracking-wider">
+                    <th className="px-3 py-4 w-10">
+                      <button
+                        onClick={() => setSelectedIds(prev => prev.size === filteredSheets.length ? new Set() : new Set(filteredSheets.map(s => s.id)))}
+                        className={`w-4 h-4 rounded border-2 flex items-center justify-center transition-all ${selectedIds.size > 0 ? 'bg-green-500 border-green-500' : darkMode ? 'border-slate-600' : 'border-slate-300'}`}
+                        aria-label="Select all"
+                      >
+                        {selectedIds.size > 0 && selectedIds.size === filteredSheets.length && <Check size={9} className="text-white" />}
+                      </button>
+                    </th>
                     <th className="px-4 md:px-6 py-4">Sheet</th>
                     <th className="px-4 md:px-6 py-4 cursor-pointer hover:text-green-500 transition-colors" onClick={() => handleSort('title')}>
                       <div className="flex items-center">Title <SortIcon colKey="title" /></div>
@@ -341,9 +571,18 @@ const Dashboard: React.FC<DashboardProps> = ({ onUploadClick, onPreview, darkMod
                 </thead>
                 <tbody className={`divide-y ${darkMode ? 'divide-slate-800' : 'divide-slate-100'}`}>
                   {filteredSheets.map(sheet => (
-                    <tr key={sheet.id} className={darkMode ? 'hover:bg-slate-800/30' : 'hover:bg-slate-50'}>
+                    <tr key={sheet.id} className={`transition-colors ${selectedIds.has(sheet.id) ? (darkMode ? 'bg-green-500/5' : 'bg-green-50') : (darkMode ? 'hover:bg-slate-800/30' : 'hover:bg-slate-50')}`}>
+                      <td className="px-3 py-4">
+                        <button
+                          onClick={(e) => toggleSelect(sheet.id, e)}
+                          aria-label="Select"
+                          className={`w-4 h-4 rounded border-2 flex items-center justify-center transition-all ${selectedIds.has(sheet.id) ? 'bg-green-500 border-green-500' : darkMode ? 'border-slate-600' : 'border-slate-300'}`}
+                        >
+                          {selectedIds.has(sheet.id) && <Check size={9} className="text-white" />}
+                        </button>
+                      </td>
                       <td className="px-4 md:px-6 py-4">
-                        <button 
+                        <button
                           type="button"
                           onClick={() => onPreview(sheet)}
                           className="relative overflow-hidden rounded border border-slate-700 active:scale-95 transition-transform group/img"
@@ -370,6 +609,15 @@ const Dashboard: React.FC<DashboardProps> = ({ onUploadClick, onPreview, darkMod
                       <td className="px-4 md:px-6 py-4 text-right">
                         {/* Added text-white on mobile to dashboard list actions as requested */}
                         <div className="flex items-center justify-end gap-1 max-md:text-white">
+                          <button
+                            type="button"
+                            onClick={(e) => { e.stopPropagation(); setSelectedSheetForAnalytics(selectedSheetForAnalytics?.id === sheet.id ? null : sheet); }}
+                            aria-label="Analytics"
+                            className={`p-2 transition-colors ${selectedSheetForAnalytics?.id === sheet.id ? 'text-green-500' : 'hover:text-green-500'}`}
+                            title="Analytics"
+                          >
+                            <BarChart2 size={16}/>
+                          </button>
                           <button
                             type="button"
                             onClick={(e) => toggleVisibility(e, sheet)}
@@ -415,14 +663,59 @@ const Dashboard: React.FC<DashboardProps> = ({ onUploadClick, onPreview, darkMod
             </div>
           </div>
         )}
+
+        {/* Analytics panel */}
+        {selectedSheetForAnalytics && (
+          <AnalyticsPanel
+            sheet={selectedSheetForAnalytics}
+            darkMode={darkMode}
+            onClose={() => setSelectedSheetForAnalytics(null)}
+          />
+        )}
       </div>
+      )} {/* end activeTab === 'mine' */}
+
+      {/* Floating batch action bar */}
+      {selectedIds.size > 0 && (
+        <div className={`fixed bottom-20 md:bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 px-5 py-3 rounded-2xl border shadow-2xl backdrop-blur-xl animate-in slide-in-from-bottom-4 duration-200 ${darkMode ? 'bg-slate-900 border-slate-700' : 'bg-white border-slate-200'}`}>
+          <span className={`text-sm font-bold ${darkMode ? 'text-slate-200' : 'text-slate-800'}`}>{selectedIds.size} selected</span>
+          <div className="h-4 w-px bg-slate-600/30 mx-1" />
+          <button
+            onClick={() => { const all = filteredSheets.map(s => s.id); setSelectedIds(prev => prev.size === all.length ? new Set() : new Set(all)); }}
+            className="text-xs text-slate-500 hover:text-green-500 transition-colors"
+          >
+            {selectedIds.size === filteredSheets.length ? 'Deselect all' : 'Select all'}
+          </button>
+          <button
+            onClick={() => batchUpdateVisibility(true)}
+            className="px-3 py-1.5 bg-blue-500/10 text-blue-500 hover:bg-blue-500 hover:text-white text-xs font-bold rounded-lg transition-all"
+          >
+            Make Public
+          </button>
+          <button
+            onClick={() => batchUpdateVisibility(false)}
+            className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all ${darkMode ? 'bg-slate-800 text-slate-300 hover:bg-slate-700' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
+          >
+            Make Private
+          </button>
+          <button
+            onClick={() => setBatchDeleteConfirm(true)}
+            className="px-3 py-1.5 bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white text-xs font-bold rounded-lg transition-all"
+          >
+            Delete
+          </button>
+          <button onClick={() => setSelectedIds(new Set())} className="text-slate-500 hover:text-slate-300 transition-colors ml-1">
+            <X size={16} />
+          </button>
+        </div>
+      )}
 
       {editingSheet && (
-        <EditSheetModal 
-          sheet={editingSheet} 
-          onClose={() => setEditingSheet(null)} 
-          onSave={handleUpdateSheet} 
-          darkMode={darkMode} 
+        <EditSheetModal
+          sheet={editingSheet}
+          onClose={() => setEditingSheet(null)}
+          onSave={handleUpdateSheet}
+          darkMode={darkMode}
         />
       )}
 
@@ -436,6 +729,25 @@ const Dashboard: React.FC<DashboardProps> = ({ onUploadClick, onPreview, darkMod
           textPrimary={textPrimary}
           textSecondary={textSecondary}
         />
+      )}
+
+      {/* Batch delete confirmation */}
+      {batchDeleteConfirm && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center px-4 bg-black/70 backdrop-blur-sm animate-in fade-in duration-300">
+          <div className={`w-full max-w-md rounded-3xl overflow-hidden border animate-in zoom-in-95 duration-200 ${darkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200 shadow-2xl'}`}>
+            <div className="p-8 text-center">
+              <div className="w-16 h-16 rounded-2xl bg-red-500/10 flex items-center justify-center mx-auto mb-6">
+                <AlertTriangle className="text-red-500" size={32} />
+              </div>
+              <h2 className={`text-2xl font-serif font-bold mb-2 ${textPrimary}`}>Delete {selectedIds.size} Sheets?</h2>
+              <p className={`mb-8 ${textSecondary}`}>This will permanently delete {selectedIds.size} selected sheet{selectedIds.size > 1 ? 's' : ''}. This cannot be undone.</p>
+              <div className="flex gap-3">
+                <button autoFocus onClick={() => setBatchDeleteConfirm(false)} className={`flex-1 py-3.5 font-bold rounded-xl border transition-all active:scale-95 ${darkMode ? 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700' : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'}`}>Cancel</button>
+                <button onClick={executeBatchDelete} className="flex-1 py-3.5 bg-red-500 hover:bg-red-600 text-white font-bold rounded-xl transition-all shadow-xl shadow-red-500/20 active:scale-95 flex items-center justify-center gap-2"><Trash2 size={18} /> Delete</button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
