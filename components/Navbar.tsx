@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Home, Music, LayoutDashboard, ShieldAlert, Moon, Sun, LogOut, LogIn, Info, BookOpen, HelpCircle } from 'lucide-react';
+import { Home, Music, LayoutDashboard, ShieldAlert, Moon, Sun, LogOut, LogIn, Info, HelpCircle } from 'lucide-react';
 import { View } from '../types';
 
 interface NavbarProps {
@@ -98,10 +98,6 @@ const Navbar: React.FC<NavbarProps> = ({ activeView, onViewChange, currentUser, 
                   <button onClick={() => { onViewChange('dashboard'); setShowProfileMenu(false); }} className={`w-full flex items-center gap-3 px-4 py-2 text-sm transition-colors ${darkMode ? 'text-slate-300 hover:bg-slate-800' : 'text-slate-700 hover:bg-slate-50'}`}>
                     <LayoutDashboard size={16} />
                     Dashboard
-                  </button>
-                  <button onClick={() => { onViewChange('collections'); setShowProfileMenu(false); }} className={`w-full flex items-center gap-3 px-4 py-2 text-sm transition-colors ${darkMode ? 'text-slate-300 hover:bg-slate-800' : 'text-slate-700 hover:bg-slate-50'}`}>
-                    <BookOpen size={16} />
-                    Collections
                   </button>
                   <button onClick={() => { onViewChange('help'); setShowProfileMenu(false); }} className={`w-full flex items-center gap-3 px-4 py-2 text-sm transition-colors ${darkMode ? 'text-slate-300 hover:bg-slate-800' : 'text-slate-700 hover:bg-slate-50'}`}>
                     <HelpCircle size={16} />

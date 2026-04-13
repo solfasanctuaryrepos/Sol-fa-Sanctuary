@@ -337,6 +337,7 @@ const App: React.FC = () => {
             onSheetUpdated={(sheet) => setSheets(prev => prev.map(s => s.id === sheet.id ? sheet : s))}
             userFavorites={userFavorites}
             onFavoritesChange={setUserFavorites}
+            onNavigateCollections={() => setCurrentView('collections')}
           />
         ) : null;
       case 'library':

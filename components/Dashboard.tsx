@@ -1,6 +1,6 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { Upload, Music, Eye, Download, Search, List, Grid, MoreVertical, Edit2, Trash2, FileText, ArrowUp, ArrowDown, X, Check, Lock, ShieldAlert, Globe, AlertTriangle, Heart, BarChart2, RefreshCw } from 'lucide-react';
+import { Upload, Music, Eye, Download, Search, List, Grid, MoreVertical, Edit2, Trash2, FileText, ArrowUp, ArrowDown, X, Check, Lock, ShieldAlert, Globe, AlertTriangle, Heart, BarChart2, RefreshCw, BookOpen } from 'lucide-react';
 import { MusicSheet } from '../types';
 import { db, storage } from '../supabase';
 import Modal from './Modal';
@@ -18,6 +18,7 @@ interface DashboardProps {
   onSheetUpdated: (updated: MusicSheet) => void;
   userFavorites?: string[];
   onFavoritesChange?: (favs: string[]) => void;
+  onNavigateCollections?: () => void;
 }
 
 type SortConfig = { key: keyof MusicSheet; direction: 'asc' | 'desc' } | null;
@@ -126,7 +127,7 @@ const AnalyticsPanel: React.FC<{ sheet: MusicSheet; darkMode: boolean; onClose: 
 };
 // ─────────────────────────────────────────────────────────────────────────────
 
-const Dashboard: React.FC<DashboardProps> = ({ onUploadClick, onPreview, darkMode, sheets, userEmail, userId, onSheetDeleted, onSheetUpdated, userFavorites = [], onFavoritesChange }) => {
+const Dashboard: React.FC<DashboardProps> = ({ onUploadClick, onPreview, darkMode, sheets, userEmail, userId, onSheetDeleted, onSheetUpdated, userFavorites = [], onFavoritesChange, onNavigateCollections }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [viewMode, setViewMode] = useState<'list' | 'grid'>('grid');
   const [sortConfig, setSortConfig] = useState<SortConfig>(null);
@@ -323,13 +324,24 @@ const Dashboard: React.FC<DashboardProps> = ({ onUploadClick, onPreview, darkMod
           <h1 className={`text-3xl font-serif font-bold ${textPrimary}`}>Dashboard</h1>
           <p className={textSecondary}>Here's an overview of your music sanctuary.</p>
         </div>
-        <button
-          onClick={onUploadClick}
-          className="flex items-center justify-center gap-2 px-6 py-2.5 bg-green-500 hover:bg-green-600 text-white font-semibold rounded-lg transition-all shadow-lg active:scale-95 shadow-green-500/10"
-        >
-          <Upload size={18} />
-          Upload Music
-        </button>
+        <div className="flex items-center gap-2">
+          {onNavigateCollections && (
+            <button
+              onClick={onNavigateCollections}
+              className={`flex items-center justify-center gap-2 px-5 py-2.5 border font-semibold rounded-lg transition-all active:scale-95 ${darkMode ? 'border-slate-700 text-slate-300 hover:bg-slate-800' : 'border-slate-200 text-slate-700 hover:bg-slate-50'}`}
+            >
+              <BookOpen size={18} />
+              Collections
+            </button>
+          )}
+          <button
+            onClick={onUploadClick}
+            className="flex items-center justify-center gap-2 px-6 py-2.5 bg-green-500 hover:bg-green-600 text-white font-semibold rounded-lg transition-all shadow-lg active:scale-95 shadow-green-500/10"
+          >
+            <Upload size={18} />
+            Upload Music
+          </button>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
