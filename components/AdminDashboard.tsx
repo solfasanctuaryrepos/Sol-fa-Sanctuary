@@ -3,6 +3,7 @@ import { Search, Trash2, ChevronDown, Music, List, Grid, X, ArrowUp, ArrowDown, 
 import React, { useState, useRef, useEffect, useCallback, memo } from 'react';
 import { AdminTab, MusicSheet, User } from '../types';
 import { db } from '../supabase';
+import Modal from './Modal';
 
 const PAGE_SIZE = 20;
 
@@ -241,11 +242,11 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onPreview, darkMode, sh
     (u.displayName && u.displayName.toLowerCase().includes(searchTerm.toLowerCase()))
   );
 
-  const sortedSheets = [...filteredSheets].sort((a: any, b: any) => {
+  const sortedSheets = [...filteredSheets].sort((a: MusicSheet, b: MusicSheet) => {
     if (!sheetSortConfig) return 0;
     const { key, direction } = sheetSortConfig;
-    let valA = a[key];
-    let valB = b[key];
+    let valA: string | number = a[key as keyof MusicSheet] as string | number;
+    let valB: string | number = b[key as keyof MusicSheet] as string | number;
     if (typeof valA === 'string') valA = valA.toLowerCase();
     if (typeof valB === 'string') valB = valB.toLowerCase();
     if (valA < valB) return direction === 'asc' ? -1 : 1;
@@ -253,11 +254,11 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onPreview, darkMode, sh
     return 0;
   });
 
-  const sortedUsers = [...filteredUsers].sort((a: any, b: any) => {
+  const sortedUsers = [...filteredUsers].sort((a: User, b: User) => {
     if (!userSortConfig) return 0;
     const { key, direction } = userSortConfig;
-    let valA = a[key];
-    let valB = b[key];
+    let valA: string | number = (a[key as keyof User] ?? '') as string | number;
+    let valB: string | number = (b[key as keyof User] ?? '') as string | number;
     if (typeof valA === 'string') valA = valA.toLowerCase();
     if (typeof valB === 'string') valB = valB.toLowerCase();
     if (valA < valB) return direction === 'asc' ? -1 : 1;
@@ -745,34 +746,32 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onPreview, darkMode, sh
       )}
 
       {/* Role change confirmation modal */}
-      {roleChangeConfirmation && (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center px-4 bg-black/70 backdrop-blur-sm animate-in fade-in duration-300">
-          <div className={`w-full max-w-md rounded-3xl overflow-hidden border animate-in zoom-in-95 duration-200 ${darkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200 shadow-2xl'}`}>
-            <div className="p-8 text-center">
-              <div className="w-16 h-16 rounded-2xl bg-purple-500/10 flex items-center justify-center mx-auto mb-6">
-                <Shield className="text-purple-500" size={32} />
-              </div>
-              <h2 className={`text-2xl font-serif font-bold mb-2 ${textPrimary}`}>
-                {roleChangeConfirmation.newRole === 'admin' ? 'Promote to Admin?' : 'Remove Admin Access?'}
-              </h2>
-              <p className={`mb-8 ${textSecondary}`}>
-                {roleChangeConfirmation.newRole === 'admin'
-                  ? `Promote ${roleChangeConfirmation.user.displayName || roleChangeConfirmation.user.email} to Admin? They will have full access to all content and user management.`
-                  : `Remove admin access from ${roleChangeConfirmation.user.displayName || roleChangeConfirmation.user.email}?`}
-              </p>
-              <div className="flex gap-3">
-                <button autoFocus onClick={() => setRoleChangeConfirmation(null)} className={`flex-1 py-3.5 font-bold rounded-xl border transition-all active:scale-95 ${darkMode ? 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700' : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'}`}>Cancel</button>
-                <button onClick={executeRoleChange} className="flex-1 py-3.5 bg-purple-500 hover:bg-purple-600 text-white font-bold rounded-xl transition-all shadow-xl shadow-purple-500/20 active:scale-95 flex items-center justify-center gap-2"><Shield size={18} /> Confirm</button>
-              </div>
+      <Modal isOpen={!!roleChangeConfirmation} onClose={() => setRoleChangeConfirmation(null)} darkMode={darkMode} maxWidth="md">
+        {roleChangeConfirmation && (
+          <div className="p-8 text-center">
+            <div className="w-16 h-16 rounded-2xl bg-purple-500/10 flex items-center justify-center mx-auto mb-6">
+              <Shield className="text-purple-500" size={32} />
+            </div>
+            <h2 className={`text-2xl font-serif font-bold mb-2 ${textPrimary}`}>
+              {roleChangeConfirmation.newRole === 'admin' ? 'Promote to Admin?' : 'Remove Admin Access?'}
+            </h2>
+            <p className={`mb-8 ${textSecondary}`}>
+              {roleChangeConfirmation.newRole === 'admin'
+                ? `Promote ${roleChangeConfirmation.user.displayName || roleChangeConfirmation.user.email} to Admin? They will have full access to all content and user management.`
+                : `Remove admin access from ${roleChangeConfirmation.user.displayName || roleChangeConfirmation.user.email}?`}
+            </p>
+            <div className="flex gap-3">
+              <button autoFocus onClick={() => setRoleChangeConfirmation(null)} className={`flex-1 py-3.5 font-bold rounded-xl border transition-all active:scale-95 ${darkMode ? 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700' : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'}`}>Cancel</button>
+              <button onClick={executeRoleChange} className="flex-1 py-3.5 bg-purple-500 hover:bg-purple-600 text-white font-bold rounded-xl transition-all shadow-xl shadow-purple-500/20 active:scale-95 flex items-center justify-center gap-2"><Shield size={18} /> Confirm</button>
             </div>
           </div>
-        </div>
-      )}
+        )}
+      </Modal>
     </div>
   );
 };
 
-// ── Focus-trapped delete confirmation modal for AdminDashboard ────────────────
+// ── Delete confirmation modal for AdminDashboard ─────────────────────────────
 interface AdminDeleteConfirmModalProps {
   title: string;
   darkMode: boolean;
@@ -783,67 +782,37 @@ interface AdminDeleteConfirmModalProps {
 }
 
 const AdminDeleteConfirmModal: React.FC<AdminDeleteConfirmModalProps> = ({ title, darkMode, onCancel, onConfirm, textPrimary, textSecondary }) => {
-  const modalRef = useRef<HTMLDivElement>(null);
-  const previousFocusRef = useRef<HTMLElement | null>(null);
-
-  useEffect(() => {
-    previousFocusRef.current = document.activeElement as HTMLElement;
-    const focusable = () => modalRef.current?.querySelectorAll<HTMLElement>(
-      'a[href], button:not([disabled]), input, select, textarea'
-    ) ?? [];
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key !== 'Tab') return;
-      const els = Array.from(focusable());
-      if (els.length === 0) return;
-      const first = els[0];
-      const last = els[els.length - 1];
-      if (e.shiftKey) {
-        if (document.activeElement === first) { e.preventDefault(); last.focus(); }
-      } else {
-        if (document.activeElement === last) { e.preventDefault(); first.focus(); }
-      }
-    };
-    document.addEventListener('keydown', handleKeyDown);
-    setTimeout(() => focusable()[0]?.focus(), 50);
-    return () => {
-      document.removeEventListener('keydown', handleKeyDown);
-      previousFocusRef.current?.focus();
-    };
-  }, []);
-
   return (
-    <div className="fixed inset-0 z-[200] flex items-center justify-center px-4 bg-black/70 backdrop-blur-sm animate-in fade-in duration-300">
-      <div ref={modalRef} className={`w-full max-w-md rounded-3xl overflow-hidden border animate-in zoom-in-95 duration-200 ${darkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200 shadow-2xl'}`}>
-        <div className="p-8">
-          <div className="w-16 h-16 rounded-2xl bg-red-500/10 flex items-center justify-center mx-auto mb-6">
-            <AlertTriangle className="text-red-500" size={32} />
-          </div>
-          <div className="text-center mb-8">
-            <h2 className={`text-2xl font-serif font-bold mb-2 ${textPrimary}`}>Confirm Deletion</h2>
-            <p className={`${textSecondary}`}>
-              Are you sure you want to permanently delete <span className="font-bold text-red-500">{title}</span>?
-              This action cannot be undone.
-            </p>
-          </div>
-          <div className="flex gap-3">
-            <button
-              autoFocus
-              onClick={onCancel}
-              className={`flex-1 py-3.5 font-bold rounded-xl border transition-all active:scale-95 ${darkMode ? 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700' : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'}`}
-            >
-              Cancel
-            </button>
-            <button
-              onClick={onConfirm}
-              className="flex-1 py-3.5 bg-red-500 hover:bg-red-600 text-white font-bold rounded-xl transition-all shadow-xl shadow-red-500/20 active:scale-95 flex items-center justify-center gap-2"
-            >
-              <Trash2 size={18} />
-              Delete
-            </button>
-          </div>
+    <Modal isOpen={true} onClose={onCancel} darkMode={darkMode} maxWidth="md">
+      <div className="p-8">
+        <div className="w-16 h-16 rounded-2xl bg-red-500/10 flex items-center justify-center mx-auto mb-6">
+          <AlertTriangle className="text-red-500" size={32} />
+        </div>
+        <div className="text-center mb-8">
+          <h2 className={`text-2xl font-serif font-bold mb-2 ${textPrimary}`}>Confirm Deletion</h2>
+          <p className={`${textSecondary}`}>
+            Are you sure you want to permanently delete <span className="font-bold text-red-500">{title}</span>?
+            This action cannot be undone.
+          </p>
+        </div>
+        <div className="flex gap-3">
+          <button
+            autoFocus
+            onClick={onCancel}
+            className={`flex-1 py-3.5 font-bold rounded-xl border transition-all active:scale-95 ${darkMode ? 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700' : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'}`}
+          >
+            Cancel
+          </button>
+          <button
+            onClick={onConfirm}
+            className="flex-1 py-3.5 bg-red-500 hover:bg-red-600 text-white font-bold rounded-xl transition-all shadow-xl shadow-red-500/20 active:scale-95 flex items-center justify-center gap-2"
+          >
+            <Trash2 size={18} />
+            Delete
+          </button>
         </div>
       </div>
-    </div>
+    </Modal>
   );
 };
 // ─────────────────────────────────────────────────────────────────────────────

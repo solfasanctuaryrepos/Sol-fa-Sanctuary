@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Download, Share2, Printer, Eye, Calendar, User, FileText, Music as MusicIcon, X, Moon, Sun, ExternalLink, Menu, ChevronUp, Loader2, AlertTriangle, AlertCircle, Heart, FolderPlus, Trash2, MessageSquare, Send } from 'lucide-react';
 import { MusicSheet, Comment, Collection } from '../types';
 import { db } from '../supabase';
+import { getPdfUrl } from '../utils/signedUrl';
 
 interface FullPreviewPageProps {
   sheet: MusicSheet | null;
@@ -650,6 +651,7 @@ const FullPreviewPage: React.FC<FullPreviewPageProps> = ({
   const [isPrinting, setIsPrinting] = useState(false);
   const [pdfError, setPdfError] = useState<string | null>(null);
   const [pdfLoadKey, setPdfLoadKey] = useState(0);
+  const [resolvedPdfUrl, setResolvedPdfUrl] = useState(sheet?.pdfUrl ?? '');
   const [copiedToast, setCopiedToast] = useState(false);
   const [localViews, setLocalViews] = useState(sheet?.views ?? 0);
   const [localDownloads, setLocalDownloads] = useState(sheet?.downloads ?? 0);
@@ -698,6 +700,11 @@ const FullPreviewPage: React.FC<FullPreviewPageProps> = ({
       }, 15000);
 
       try {
+        // Resolve signed URL for private sheets
+        const pdfUrl = await getPdfUrl(sheet);
+        if (cancelled) return;
+        setResolvedPdfUrl(pdfUrl);
+
         const pdfjsLib = (window as any).pdfjsLib;
         if (!pdfjsLib) throw new Error('PDF.js not loaded');
 
@@ -705,7 +712,7 @@ const FullPreviewPage: React.FC<FullPreviewPageProps> = ({
           `https://cdn.jsdelivr.net/npm/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.js`;
 
         const loadingTask = pdfjsLib.getDocument({
-          url: sheet.pdfUrl,
+          url: pdfUrl,
           rangeChunkSize: 65536,
           disableAutoFetch: false,
           disableStream: false,
@@ -821,7 +828,7 @@ const FullPreviewPage: React.FC<FullPreviewPageProps> = ({
   const handleDownload = () => handleProtectedAction(() => {
     trackInteraction('downloads');
     const a = document.createElement('a');
-    a.href = sheet?.pdfUrl ?? '';
+    a.href = resolvedPdfUrl || sheet?.pdfUrl || '';
     a.download = `${sheet?.title ?? 'sheet'}.pdf`;
     a.click();
   });
@@ -834,7 +841,8 @@ const FullPreviewPage: React.FC<FullPreviewPageProps> = ({
   };
 
   const handlePrint = () => handleProtectedAction(() => {
-    if (sheet?.pdfUrl) window.open(sheet.pdfUrl, '_blank');
+    const url = resolvedPdfUrl || sheet?.pdfUrl;
+    if (url) window.open(url, '_blank');
   });
 
   const handleAddToCollection = () => {

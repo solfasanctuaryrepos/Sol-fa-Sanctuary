@@ -2,6 +2,7 @@ import React, { useRef, useState, useEffect } from 'react';
 import { X, Upload, FileText, Check, Loader2, AlertCircle, Mail, RefreshCw } from 'lucide-react';
 import { auth, db, storage, supabase } from '../supabase';
 import { MusicSheet } from '../types';
+import Modal from './Modal';
 
 interface UploadModalProps {
   isOpen: boolean;
@@ -26,50 +27,7 @@ const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose, darkMode, us
   const [fileError, setFileError] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
 
-  const overlayRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const modalRef = useRef<HTMLDivElement>(null);
-  const previousFocusRef = useRef<HTMLElement | null>(null);
-
-  // Focus trap + restore focus on close
-  useEffect(() => {
-    if (!isOpen) return;
-    previousFocusRef.current = document.activeElement as HTMLElement;
-
-    const focusable = () => modalRef.current?.querySelectorAll<HTMLElement>(
-      'a[href], button:not([disabled]), input, select, textarea'
-    ) ?? [];
-
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key !== 'Tab') return;
-      const els = Array.from(focusable());
-      if (els.length === 0) return;
-      const first = els[0];
-      const last = els[els.length - 1];
-      if (e.shiftKey) {
-        if (document.activeElement === first) { e.preventDefault(); last.focus(); }
-      } else {
-        if (document.activeElement === last) { e.preventDefault(); first.focus(); }
-      }
-    };
-
-    document.addEventListener('keydown', handleKeyDown);
-    // Autofocus first focusable element
-    setTimeout(() => focusable()[0]?.focus(), 50);
-
-    return () => {
-      document.removeEventListener('keydown', handleKeyDown);
-      previousFocusRef.current?.focus();
-    };
-  }, [isOpen]);
-
-  if (!isOpen) return null;
-
-  const handleOverlayClick = (e: React.MouseEvent) => {
-    if (e.target === overlayRef.current && !isUploading) {
-      onClose();
-    }
-  };
 
   const validateAndSetFile = (selectedFile: File) => {
     if (selectedFile.type !== 'application/pdf') {
@@ -282,12 +240,7 @@ const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose, darkMode, us
   const inputBg = darkMode ? 'bg-slate-950 border-slate-800' : 'bg-slate-50 border-slate-200';
 
   return (
-    <div 
-      ref={overlayRef}
-      onClick={handleOverlayClick}
-      className="fixed inset-0 z-[100] flex items-center justify-center px-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200"
-    >
-      <div ref={modalRef} className={`w-full max-w-xl rounded-2xl overflow-hidden border animate-in zoom-in-95 duration-200 ${bgClass}`}>
+    <Modal isOpen={isOpen} onClose={onClose} darkMode={darkMode} maxWidth="xl" loading={isUploading}>
         <div className={`flex items-center justify-between p-6 border-b ${darkMode ? 'border-slate-800' : 'border-slate-100'}`}>
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 bg-green-500/10 rounded-full flex items-center justify-center">
@@ -445,8 +398,7 @@ const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose, darkMode, us
             </button>
           </form>
         )}
-      </div>
-    </div>
+    </Modal>
   );
 };
 

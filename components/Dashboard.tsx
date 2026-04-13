@@ -3,6 +3,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Upload, Music, Eye, Download, Search, List, Grid, MoreVertical, Edit2, Trash2, FileText, ArrowUp, ArrowDown, X, Check, Lock, ShieldAlert, Globe, AlertTriangle, Heart, BarChart2, RefreshCw } from 'lucide-react';
 import { MusicSheet } from '../types';
 import { db, storage } from '../supabase';
+import Modal from './Modal';
 
 interface DashboardProps {
   onUploadClick: () => void;
@@ -161,12 +162,12 @@ const Dashboard: React.FC<DashboardProps> = ({ onUploadClick, onPreview, darkMod
     return num;
   };
 
-  const sortedSheets = [...userSheets].sort((a, b) => {
+  const sortedSheets = [...userSheets].sort((a: MusicSheet, b: MusicSheet) => {
     if (!sortConfig) return 0;
     const { key, direction } = sortConfig;
-    
-    let valA: any = a[key];
-    let valB: any = b[key];
+
+    let valA: string | number = a[key] as string | number;
+    let valB: string | number = b[key] as string | number;
 
     if (key === 'fileSize') {
       valA = parseSize(valA as string);
@@ -737,28 +738,24 @@ const Dashboard: React.FC<DashboardProps> = ({ onUploadClick, onPreview, darkMod
       )}
 
       {/* Batch delete confirmation */}
-      {batchDeleteConfirm && (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center px-4 bg-black/70 backdrop-blur-sm animate-in fade-in duration-300">
-          <div className={`w-full max-w-md rounded-3xl overflow-hidden border animate-in zoom-in-95 duration-200 ${darkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200 shadow-2xl'}`}>
-            <div className="p-8 text-center">
-              <div className="w-16 h-16 rounded-2xl bg-red-500/10 flex items-center justify-center mx-auto mb-6">
-                <AlertTriangle className="text-red-500" size={32} />
-              </div>
-              <h2 className={`text-2xl font-serif font-bold mb-2 ${textPrimary}`}>Delete {selectedIds.size} Sheets?</h2>
-              <p className={`mb-8 ${textSecondary}`}>This will permanently delete {selectedIds.size} selected sheet{selectedIds.size > 1 ? 's' : ''}. This cannot be undone.</p>
-              <div className="flex gap-3">
-                <button autoFocus onClick={() => setBatchDeleteConfirm(false)} className={`flex-1 py-3.5 font-bold rounded-xl border transition-all active:scale-95 ${darkMode ? 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700' : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'}`}>Cancel</button>
-                <button onClick={executeBatchDelete} className="flex-1 py-3.5 bg-red-500 hover:bg-red-600 text-white font-bold rounded-xl transition-all shadow-xl shadow-red-500/20 active:scale-95 flex items-center justify-center gap-2"><Trash2 size={18} /> Delete</button>
-              </div>
-            </div>
+      <Modal isOpen={batchDeleteConfirm} onClose={() => setBatchDeleteConfirm(false)} darkMode={darkMode} maxWidth="md">
+        <div className="p-8 text-center">
+          <div className="w-16 h-16 rounded-2xl bg-red-500/10 flex items-center justify-center mx-auto mb-6">
+            <AlertTriangle className="text-red-500" size={32} />
+          </div>
+          <h2 className={`text-2xl font-serif font-bold mb-2 ${textPrimary}`}>Delete {selectedIds.size} Sheets?</h2>
+          <p className={`mb-8 ${textSecondary}`}>This will permanently delete {selectedIds.size} selected sheet{selectedIds.size > 1 ? 's' : ''}. This cannot be undone.</p>
+          <div className="flex gap-3">
+            <button autoFocus onClick={() => setBatchDeleteConfirm(false)} className={`flex-1 py-3.5 font-bold rounded-xl border transition-all active:scale-95 ${darkMode ? 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700' : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'}`}>Cancel</button>
+            <button onClick={executeBatchDelete} className="flex-1 py-3.5 bg-red-500 hover:bg-red-600 text-white font-bold rounded-xl transition-all shadow-xl shadow-red-500/20 active:scale-95 flex items-center justify-center gap-2"><Trash2 size={18} /> Delete</button>
           </div>
         </div>
-      )}
+      </Modal>
     </div>
   );
 };
 
-// ── Focus-trapped delete confirmation modal ───────────────────────────────────
+// ── Delete confirmation modal ─────────────────────────────────────────────────
 interface DeleteConfirmModalProps {
   title: string;
   darkMode: boolean;
@@ -769,67 +766,37 @@ interface DeleteConfirmModalProps {
 }
 
 const DeleteConfirmModal: React.FC<DeleteConfirmModalProps> = ({ title, darkMode, onCancel, onConfirm, textPrimary, textSecondary }) => {
-  const modalRef = useRef<HTMLDivElement>(null);
-  const previousFocusRef = useRef<HTMLElement | null>(null);
-
-  useEffect(() => {
-    previousFocusRef.current = document.activeElement as HTMLElement;
-    const focusable = () => modalRef.current?.querySelectorAll<HTMLElement>(
-      'a[href], button:not([disabled]), input, select, textarea'
-    ) ?? [];
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key !== 'Tab') return;
-      const els = Array.from(focusable());
-      if (els.length === 0) return;
-      const first = els[0];
-      const last = els[els.length - 1];
-      if (e.shiftKey) {
-        if (document.activeElement === first) { e.preventDefault(); last.focus(); }
-      } else {
-        if (document.activeElement === last) { e.preventDefault(); first.focus(); }
-      }
-    };
-    document.addEventListener('keydown', handleKeyDown);
-    setTimeout(() => focusable()[0]?.focus(), 50);
-    return () => {
-      document.removeEventListener('keydown', handleKeyDown);
-      previousFocusRef.current?.focus();
-    };
-  }, []);
-
   return (
-    <div className="fixed inset-0 z-[200] flex items-center justify-center px-4 bg-black/70 backdrop-blur-sm animate-in fade-in duration-300">
-      <div ref={modalRef} className={`w-full max-w-md rounded-3xl overflow-hidden border animate-in zoom-in-95 duration-200 ${darkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200 shadow-2xl'}`}>
-        <div className="p-8">
-          <div className="w-16 h-16 rounded-2xl bg-red-500/10 flex items-center justify-center mx-auto mb-6">
-            <AlertTriangle className="text-red-500" size={32} />
-          </div>
-          <div className="text-center mb-8">
-            <h2 className={`text-2xl font-serif font-bold mb-2 ${textPrimary}`}>Confirm Deletion</h2>
-            <p className={`${textSecondary}`}>
-              Are you sure you want to permanently delete <span className="font-bold text-red-500">{title}</span>?
-              This action cannot be undone.
-            </p>
-          </div>
-          <div className="flex gap-3">
-            <button
-              autoFocus
-              onClick={onCancel}
-              className={`flex-1 py-3.5 font-bold rounded-xl border transition-all active:scale-95 ${darkMode ? 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700' : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'}`}
-            >
-              Cancel
-            </button>
-            <button
-              onClick={onConfirm}
-              className="flex-1 py-3.5 bg-red-500 hover:bg-red-600 text-white font-bold rounded-xl transition-all shadow-xl shadow-red-500/20 active:scale-95 flex items-center justify-center gap-2"
-            >
-              <Trash2 size={18} />
-              Delete
-            </button>
-          </div>
+    <Modal isOpen={true} onClose={onCancel} darkMode={darkMode} maxWidth="md">
+      <div className="p-8">
+        <div className="w-16 h-16 rounded-2xl bg-red-500/10 flex items-center justify-center mx-auto mb-6">
+          <AlertTriangle className="text-red-500" size={32} />
+        </div>
+        <div className="text-center mb-8">
+          <h2 className={`text-2xl font-serif font-bold mb-2 ${textPrimary}`}>Confirm Deletion</h2>
+          <p className={`${textSecondary}`}>
+            Are you sure you want to permanently delete <span className="font-bold text-red-500">{title}</span>?
+            This action cannot be undone.
+          </p>
+        </div>
+        <div className="flex gap-3">
+          <button
+            autoFocus
+            onClick={onCancel}
+            className={`flex-1 py-3.5 font-bold rounded-xl border transition-all active:scale-95 ${darkMode ? 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700' : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'}`}
+          >
+            Cancel
+          </button>
+          <button
+            onClick={onConfirm}
+            className="flex-1 py-3.5 bg-red-500 hover:bg-red-600 text-white font-bold rounded-xl transition-all shadow-xl shadow-red-500/20 active:scale-95 flex items-center justify-center gap-2"
+          >
+            <Trash2 size={18} />
+            Delete
+          </button>
         </div>
       </div>
-    </div>
+    </Modal>
   );
 };
 // ─────────────────────────────────────────────────────────────────────────────
@@ -879,36 +846,7 @@ const EditSheetModal: React.FC<EditSheetModalProps> = ({ sheet, onClose, onSave,
   const [uploading, setUploading] = useState(false);
   const [uploadStatus, setUploadStatus] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const overlayRef = useRef<HTMLDivElement>(null);
-  const modalRef = useRef<HTMLDivElement>(null);
-  const previousFocusRef = useRef<HTMLElement | null>(null);
 
-  useEffect(() => {
-    previousFocusRef.current = document.activeElement as HTMLElement;
-    const focusable = () => modalRef.current?.querySelectorAll<HTMLElement>(
-      'a[href], button:not([disabled]), input, select, textarea'
-    ) ?? [];
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key !== 'Tab') return;
-      const els = Array.from(focusable());
-      if (els.length === 0) return;
-      const first = els[0];
-      const last = els[els.length - 1];
-      if (e.shiftKey) {
-        if (document.activeElement === first) { e.preventDefault(); last.focus(); }
-      } else {
-        if (document.activeElement === last) { e.preventDefault(); first.focus(); }
-      }
-    };
-    document.addEventListener('keydown', handleKeyDown);
-    setTimeout(() => focusable()[0]?.focus(), 50);
-    return () => {
-      document.removeEventListener('keydown', handleKeyDown);
-      previousFocusRef.current?.focus();
-    };
-  }, []);
-
-  const bgClass = darkMode ? 'bg-[#0f172a] border-slate-800' : 'bg-white border-slate-200 shadow-2xl';
   const textPrimary = darkMode ? 'text-slate-100' : 'text-slate-900';
   const textSecondary = darkMode ? 'text-slate-400' : 'text-slate-600';
   const inputBg = darkMode ? 'bg-slate-950 border-slate-800' : 'bg-slate-50 border-slate-200';
@@ -975,12 +913,7 @@ const EditSheetModal: React.FC<EditSheetModalProps> = ({ sheet, onClose, onSave,
   };
 
   return (
-    <div
-      ref={overlayRef}
-      onClick={(e) => e.target === overlayRef.current && !uploading && onClose()}
-      className="fixed inset-0 z-[200] flex items-center justify-center px-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200"
-    >
-      <div ref={modalRef} className={`w-full max-w-xl rounded-2xl overflow-hidden border animate-in zoom-in-95 duration-200 ${bgClass}`}>
+    <Modal isOpen={true} onClose={onClose} darkMode={darkMode} maxWidth="xl" loading={uploading}>
         <div className={`flex items-center justify-between p-6 border-b ${darkMode ? 'border-slate-800' : 'border-slate-100'}`}>
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 bg-green-500/10 rounded-full flex items-center justify-center">
@@ -1122,8 +1055,7 @@ const EditSheetModal: React.FC<EditSheetModalProps> = ({ sheet, onClose, onSave,
             ) : 'Save Changes'}
           </button>
         </form>
-      </div>
-    </div>
+    </Modal>
   );
 };
 

@@ -1,5 +1,5 @@
 
-export type View = 'home' | 'library' | 'dashboard' | 'admin' | 'about' | 'profile' | 'collections';
+export type View = 'home' | 'library' | 'dashboard' | 'admin' | 'about' | 'profile' | 'collections' | 'help';
 export type AdminTab = 'users' | 'content';
 
 export interface Comment {

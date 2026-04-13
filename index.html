@@ -32,20 +32,24 @@
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIzMiIgaGVpZ2h0PSIzMiIgdmlld0JveD0iMCAwIDMyIDMyIj48cmVjdCB3aWR0aD0iMzIiIGhlaWdodD0iMzIiIHByeD0iOCIgZmlsbD0iIzIyYzU1ZSIvPjxwYXRoIGQ9Ik0xMSAyMFY3bDExLTJ2MTEiIHN0cm9rZT0id2hpdGUiIHN0cm9rZS13aWR0aD0iMi41IiBzdHJva2UtbGluZWNhcD0icm91bmQiIHN0cm9rZS1saW5lam9pbj0icm91bmQiIGZpbGw9Im5vbmUiLz48Y2lyY2xlIGN4PSI4IiBjeT0iMjAiIHI9IjMiIGZpbGw9IndoaXRlIi8+PGNpcmNsZSBjeD0iMTkiIGN5PSIxOCIgcj0iMyIgZmlsbD0id2hpdGUiLz48L3N2Zz4=">
     <script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js"></script>
 
-    <!-- Service Worker Cleanup: Forcefully unregister all existing SWs to ensure fresh content -->
+    <!-- Service Worker Registration -->
     <script>
       if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.getRegistrations().then(registrations => {
-          for (const registration of registrations) {
-            registration.unregister();
-            console.log('SW unregistered successfully');
-          }
-        });
-        if ('caches' in window) {
-          caches.keys().then(names => {
-            for (const name of names) caches.delete(name);
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register('/sw.js').then(reg => {
+            reg.addEventListener('updatefound', () => {
+              const newWorker = reg.installing;
+              if (newWorker) {
+                newWorker.addEventListener('statechange', () => {
+                  if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                    // New SW installed, app will show update banner
+                    window.dispatchEvent(new CustomEvent('swUpdateReady'));
+                  }
+                });
+              }
+            });
           });
-        }
+        });
       }
     </script>
 </head>

@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Home, Music, LayoutDashboard, ShieldAlert, Moon, Sun, User as UserIcon, LogOut, ChevronDown, LogIn, Info, BookOpen, Keyboard } from 'lucide-react';
+import { Home, Music, LayoutDashboard, ShieldAlert, Moon, Sun, User as UserIcon, LogOut, ChevronDown, LogIn, Info, BookOpen, Keyboard, HelpCircle } from 'lucide-react';
 import { View } from '../types';
 
 interface NavbarProps {
@@ -61,6 +61,7 @@ const Navbar: React.FC<NavbarProps> = ({ activeView, onViewChange, currentUser, 
             <NavItem id="home" icon={Home} label="Home" />
             <NavItem id="library" icon={Music} label="Music Library" />
             <NavItem id="about" icon={Info} label="About" />
+            <NavItem id="help" icon={HelpCircle} label="Help" />
             {currentUser && (
               <>
                 <NavItem id="dashboard" icon={LayoutDashboard} label="Dashboard" />
