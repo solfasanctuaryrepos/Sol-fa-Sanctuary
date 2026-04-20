@@ -868,71 +868,136 @@ const FullPreviewPage: React.FC<FullPreviewPageProps> = ({
       )}
 
       <header className={`shrink-0 z-[100] border-b backdrop-blur-xl transition-all ${headerBg} no-print`}>
-        <div className="max-w-[1920px] mx-auto px-4 md:px-6 py-1 lg:py-4">
-          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-0.5 md:gap-6">
-            <div className="flex items-center gap-4 flex-1 min-w-0">
-              <button onClick={onClose} aria-label="Back to Sanctuary" className={`p-2 rounded-lg transition-colors shrink-0 ${darkMode ? 'bg-slate-800 text-slate-400 hover:text-white' : 'bg-slate-200 text-slate-600 hover:text-slate-900'}`} title="Back to Sanctuary"><X size={20} /></button>
-              <div className="flex flex-col min-w-0 flex-1">
-                <h1 className={`text-lg md:text-xl font-serif font-bold leading-tight truncate ${textPrimary}`}>{sheet.title}</h1>
-                <p className="text-green-500 font-medium text-xs truncate">{sheet.composer}</p>
-              </div>
-              <button onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} className={`lg:hidden p-2 rounded-lg transition-colors ${darkMode ? 'text-slate-400 hover:text-white' : 'text-slate-500 hover:text-slate-900'}`}>{isMobileMenuOpen ? <ChevronUp size={24} /> : <Menu size={24} />}</button>
-              <div className="hidden lg:flex flex-col justify-center gap-1 border-l border-slate-700/50 pl-6 shrink-0">
-                <div className="flex items-center gap-2"><Eye size={16} className="text-blue-400" /><span className={`text-xs font-bold ${textPrimary}`}>{localViews}</span></div>
-                <div className="flex items-center gap-2"><Download size={16} className="text-green-500" /><span className={`text-xs font-bold ${textPrimary}`}>{localDownloads}</span></div>
-              </div>
-            </div>
-            <div className={`${isMobileMenuOpen ? 'flex' : 'hidden'} lg:flex flex-col lg:flex-row flex-1 items-start lg:items-center justify-between gap-0.5 lg:gap-0 animate-in slide-in-from-top-2 duration-300 lg:animate-none`}>
-              <div className="flex-1 grid grid-cols-3 lg:grid-cols-2 justify-center gap-y-0 gap-x-2 lg:gap-x-12 lg:px-8 lg:border-x border-slate-700/50 w-full lg:w-auto">
-                <div className="flex items-center gap-1.5 text-[10px] lg:text-[11px] min-w-0 lg:w-[100px]"><MusicIcon size={14} className="text-slate-500 shrink-0" /><span className={`font-bold truncate ${textPrimary}`}>{sheet.type}</span></div>
-                <div className="flex items-center gap-1.5 text-[10px] lg:text-[11px] min-w-0 lg:w-auto"><Calendar size={14} className="text-slate-500 shrink-0" /><span className={`font-bold truncate ${textPrimary}`}>{sheet.uploadedAt}</span></div>
-                <div className="lg:hidden flex items-center gap-1.5 text-[10px] min-w-0"><Eye size={14} className="text-blue-400 shrink-0" /><span className={`font-bold truncate ${textPrimary}`}>{localViews}</span></div>
-                <div className="flex items-center gap-1.5 text-[10px] lg:text-[11px] min-w-0 lg:w-[100px]"><FileText size={14} className="text-slate-500 shrink-0" /><span className={`font-bold truncate ${textPrimary}`}>{sheet.fileSize}</span></div>
-                <div className="flex items-center gap-1.5 text-[10px] lg:text-[11px] min-w-0 lg:w-auto"><User size={14} className="text-slate-500 shrink-0" />{onViewProfile ? (<button onClick={() => onViewProfile(sheet.uploadedBy)} className={`font-bold truncate hover:text-green-500 transition-colors ${textPrimary}`}>{sheet.uploadedBy.split('@')[0]}</button>) : (<span className={`font-bold truncate ${textPrimary}`}>{sheet.uploadedBy.split('@')[0]}</span>)}</div>
-                <div className="lg:hidden flex items-center gap-1.5 text-[10px] min-w-0"><Download size={14} className="text-green-500 shrink-0" /><span className={`font-bold truncate ${textPrimary}`}>{localDownloads}</span></div>
-              </div>
-              <div className="flex items-center gap-2 md:gap-3 w-full lg:w-auto">
-                <button onClick={onThemeToggle} aria-label={darkMode ? 'Switch to light mode' : 'Switch to dark mode'} className={`p-2.5 rounded-xl border transition-colors shrink-0 ${darkMode ? 'border-slate-800 text-slate-400 hover:text-white hover:bg-slate-900' : 'border-slate-200 text-slate-500 hover:text-slate-900 hover:bg-slate-50'}`} title="Toggle Theme">{darkMode ? <Sun size={18} /> : <Moon size={18} />}</button>
-                <div className="h-8 w-px bg-slate-700/50 mx-1 hidden lg:block"></div>
-                <div className="flex items-center gap-1.5 md:gap-2 flex-1 lg:flex-none">
-                  <button onClick={handleOpenNewTab} aria-label="Open in new tab" className={`p-2.5 rounded-xl border transition-colors shrink-0 ${darkMode ? 'border-slate-800 text-slate-400 hover:text-white hover:bg-slate-900' : 'border-slate-200 text-slate-500 hover:text-slate-900 hover:bg-slate-50 shadow-sm'}`} title="Open in new tab"><ExternalLink size={18} /></button>
-                  <button onClick={handleShare} aria-label="Share sheet" className={`p-2.5 rounded-xl border transition-colors shrink-0 ${darkMode ? 'border-slate-800 text-slate-400 hover:text-white hover:bg-slate-900' : 'border-slate-200 text-slate-500 hover:text-slate-900 hover:bg-slate-50 shadow-sm'}`} title="Share"><Share2 size={18} /></button>
-                  <button
-                    onClick={toggleFavorite}
-                    aria-label={isFavorited ? 'Remove from favourites' : 'Add to favourites'}
-                    disabled={favLoading}
-                    className={`p-2.5 rounded-xl border transition-colors shrink-0 ${isFavorited ? 'border-rose-500/50 text-rose-500 bg-rose-500/10' : darkMode ? 'border-slate-800 text-slate-400 hover:text-rose-400 hover:bg-slate-900' : 'border-slate-200 text-slate-500 hover:text-rose-500 hover:bg-slate-50 shadow-sm'}`}
-                    title={isFavorited ? 'Remove favourite' : 'Add to favourites'}
-                  >
-                    <Heart size={18} className={isFavorited ? 'fill-current' : ''} />
-                  </button>
-                  {/* Add to Collection */}
-                  <div className="relative shrink-0" ref={collectionDropRef}>
-                    <button
-                      onClick={handleAddToCollection}
-                      aria-label="Add to collection"
-                      className={`p-2.5 rounded-xl border transition-colors ${showCollectionDropdown ? (darkMode ? 'border-green-500/50 text-green-500 bg-green-500/10' : 'border-green-500/50 text-green-600 bg-green-500/10') : darkMode ? 'border-slate-800 text-slate-400 hover:text-white hover:bg-slate-900' : 'border-slate-200 text-slate-500 hover:text-slate-900 hover:bg-slate-50 shadow-sm'}`}
-                      title="Add to collection"
-                    >
-                      <FolderPlus size={18} />
-                    </button>
-                    {showCollectionDropdown && currentUserId && (
-                      <AddToCollectionDropdown
-                        sheetId={sheet.id}
-                        currentUserId={currentUserId}
-                        darkMode={darkMode}
-                        onClose={() => setShowCollectionDropdown(false)}
-                        onNavigateCollections={onNavigateCollections}
-                      />
-                    )}
-                  </div>
-                  <button onClick={handlePrint} aria-label="Print sheet" className={`p-2.5 rounded-xl border transition-colors shrink-0 ${darkMode ? 'border-slate-800 text-slate-400 hover:text-white hover:bg-slate-900' : 'border-slate-200 text-slate-500 hover:text-slate-900 hover:bg-slate-50 shadow-sm'}`} title="Open PDF for printing"><Printer size={18} /></button>
-                  <button onClick={handleDownload} aria-label="Download PDF" className="flex-1 lg:flex-none px-4 md:px-6 py-2.5 bg-green-500 hover:bg-green-600 text-slate-950 font-bold rounded-xl transition-all shadow-lg shadow-green-500/10 flex items-center justify-center gap-2 active:scale-95 text-sm md:text-base"><Download size={18} /><span>Download PDF</span></button>
-                </div>
-              </div>
+        {/* ── Single-row bar (all breakpoints) ── */}
+        <div className="max-w-[1920px] mx-auto px-3 md:px-6 h-14 md:h-16 flex items-center gap-2 md:gap-3">
+
+          {/* Close */}
+          <button onClick={onClose} aria-label="Back to Sanctuary"
+            className={`p-2 rounded-lg transition-colors shrink-0 ${darkMode ? 'bg-slate-800 text-slate-400 hover:text-white' : 'bg-slate-200 text-slate-600 hover:text-slate-900'}`}
+            title="Back to Sanctuary"><X size={20} /></button>
+
+          {/* Title + Composer — truncates, takes remaining space */}
+          <div className="flex flex-col min-w-0 flex-1">
+            <h1 className={`text-sm sm:text-base md:text-lg font-serif font-bold leading-tight truncate ${textPrimary}`}>{sheet.title}</h1>
+            <p className="text-green-500 font-medium text-[11px] truncate">{sheet.composer}</p>
+          </div>
+
+          {/* Views + Downloads — always visible, compact */}
+          <div className={`flex items-center gap-3 shrink-0 border-l pl-3 md:pl-4 ${darkMode ? 'border-slate-700/50' : 'border-slate-300/60'}`}>
+            <div className="flex items-center gap-1"><Eye size={14} className="text-blue-400" /><span className={`text-xs font-bold tabular-nums ${textPrimary}`}>{localViews}</span></div>
+            <div className="flex items-center gap-1"><Download size={14} className="text-green-500" /><span className={`text-xs font-bold tabular-nums ${textPrimary}`}>{localDownloads}</span></div>
+          </div>
+
+          {/* Metadata chips — hidden below md, inline above */}
+          <div className={`hidden md:flex items-center gap-3 lg:gap-5 shrink-0 border-l pl-4 lg:pl-6 ${darkMode ? 'border-slate-700/50' : 'border-slate-300/60'}`}>
+            <div className="flex items-center gap-1.5"><MusicIcon size={13} className="text-slate-500 shrink-0" /><span className={`text-[11px] font-semibold whitespace-nowrap ${textPrimary}`}>{sheet.type}</span></div>
+            <div className="flex items-center gap-1.5"><FileText size={13} className="text-slate-500 shrink-0" /><span className={`text-[11px] font-semibold whitespace-nowrap ${textPrimary}`}>{sheet.fileSize}</span></div>
+            <div className="hidden lg:flex items-center gap-1.5"><Calendar size={13} className="text-slate-500 shrink-0" /><span className={`text-[11px] font-semibold whitespace-nowrap ${textPrimary}`}>{sheet.uploadedAt}</span></div>
+            <div className="hidden lg:flex items-center gap-1.5"><User size={13} className="text-slate-500 shrink-0" />
+              {onViewProfile
+                ? <button onClick={() => onViewProfile(sheet.uploadedBy)} className={`text-[11px] font-semibold whitespace-nowrap hover:text-green-500 transition-colors ${textPrimary}`}>{sheet.uploadedBy.split('@')[0]}</button>
+                : <span className={`text-[11px] font-semibold whitespace-nowrap ${textPrimary}`}>{sheet.uploadedBy.split('@')[0]}</span>}
             </div>
           </div>
+
+          {/* Action buttons — hidden below md */}
+          <div className={`hidden md:flex items-center gap-1.5 lg:gap-2 shrink-0 border-l pl-3 md:pl-4 ${darkMode ? 'border-slate-700/50' : 'border-slate-300/60'}`}>
+            <button onClick={onThemeToggle} aria-label={darkMode ? 'Light mode' : 'Dark mode'}
+              className={`p-2 rounded-xl border transition-colors ${darkMode ? 'border-slate-800 text-slate-400 hover:text-white hover:bg-slate-900' : 'border-slate-200 text-slate-500 hover:text-slate-900 hover:bg-slate-50'}`}
+              title="Toggle Theme">{darkMode ? <Sun size={17} /> : <Moon size={17} />}</button>
+            <button onClick={handleOpenNewTab} aria-label="Open in new tab"
+              className={`p-2 rounded-xl border transition-colors ${darkMode ? 'border-slate-800 text-slate-400 hover:text-white hover:bg-slate-900' : 'border-slate-200 text-slate-500 hover:text-slate-900 hover:bg-slate-50 shadow-sm'}`}
+              title="Open in new tab"><ExternalLink size={17} /></button>
+            <button onClick={handleShare} aria-label="Share sheet"
+              className={`p-2 rounded-xl border transition-colors ${darkMode ? 'border-slate-800 text-slate-400 hover:text-white hover:bg-slate-900' : 'border-slate-200 text-slate-500 hover:text-slate-900 hover:bg-slate-50 shadow-sm'}`}
+              title="Share"><Share2 size={17} /></button>
+            <button onClick={toggleFavorite}
+              aria-label={isFavorited ? 'Remove from favourites' : 'Add to favourites'}
+              disabled={favLoading}
+              className={`p-2 rounded-xl border transition-colors ${isFavorited ? 'border-rose-500/50 text-rose-500 bg-rose-500/10' : darkMode ? 'border-slate-800 text-slate-400 hover:text-rose-400 hover:bg-slate-900' : 'border-slate-200 text-slate-500 hover:text-rose-500 hover:bg-slate-50 shadow-sm'}`}
+              title={isFavorited ? 'Remove favourite' : 'Add to favourites'}>
+              <Heart size={17} className={isFavorited ? 'fill-current' : ''} />
+            </button>
+            <div className="relative shrink-0" ref={collectionDropRef}>
+              <button onClick={handleAddToCollection} aria-label="Add to collection"
+                className={`p-2 rounded-xl border transition-colors ${showCollectionDropdown ? (darkMode ? 'border-green-500/50 text-green-500 bg-green-500/10' : 'border-green-500/50 text-green-600 bg-green-500/10') : darkMode ? 'border-slate-800 text-slate-400 hover:text-white hover:bg-slate-900' : 'border-slate-200 text-slate-500 hover:text-slate-900 hover:bg-slate-50 shadow-sm'}`}
+                title="Add to collection"><FolderPlus size={17} /></button>
+              {showCollectionDropdown && currentUserId && (
+                <AddToCollectionDropdown
+                  sheetId={sheet.id}
+                  currentUserId={currentUserId}
+                  darkMode={darkMode}
+                  onClose={() => setShowCollectionDropdown(false)}
+                  onNavigateCollections={onNavigateCollections}
+                />
+              )}
+            </div>
+            <button onClick={handlePrint} aria-label="Print sheet"
+              className={`p-2 rounded-xl border transition-colors ${darkMode ? 'border-slate-800 text-slate-400 hover:text-white hover:bg-slate-900' : 'border-slate-200 text-slate-500 hover:text-slate-900 hover:bg-slate-50 shadow-sm'}`}
+              title="Open PDF for printing"><Printer size={17} /></button>
+          </div>
+
+          {/* Mobile menu toggle (below md) */}
+          <button onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+            className={`md:hidden p-2 rounded-lg transition-colors shrink-0 ${darkMode ? 'text-slate-400 hover:text-white' : 'text-slate-500 hover:text-slate-900'}`}>
+            {isMobileMenuOpen ? <ChevronUp size={22} /> : <Menu size={22} />}
+          </button>
+
+          {/* Download — always visible */}
+          <button onClick={handleDownload} aria-label="Download PDF"
+            className="shrink-0 px-3 md:px-5 py-2 bg-green-500 hover:bg-green-600 text-slate-950 font-bold rounded-xl transition-all shadow-lg shadow-green-500/10 flex items-center gap-1.5 active:scale-95 text-xs md:text-sm whitespace-nowrap">
+            <Download size={16} /><span className="hidden sm:inline">Download PDF</span><span className="sm:hidden">PDF</span>
+          </button>
         </div>
+
+        {/* ── Mobile drawer (below md) — metadata + actions ── */}
+        {isMobileMenuOpen && (
+          <div className={`md:hidden border-t px-3 py-3 animate-in slide-in-from-top-1 duration-200 ${darkMode ? 'border-slate-800 bg-slate-900/95' : 'border-slate-200 bg-white/95'}`}>
+            {/* Metadata row */}
+            <div className="flex flex-wrap gap-x-4 gap-y-2 mb-3">
+              <div className="flex items-center gap-1.5"><MusicIcon size={13} className="text-slate-500" /><span className={`text-xs font-semibold ${textPrimary}`}>{sheet.type}</span></div>
+              <div className="flex items-center gap-1.5"><FileText size={13} className="text-slate-500" /><span className={`text-xs font-semibold ${textPrimary}`}>{sheet.fileSize}</span></div>
+              <div className="flex items-center gap-1.5"><Calendar size={13} className="text-slate-500" /><span className={`text-xs font-semibold ${textPrimary}`}>{sheet.uploadedAt}</span></div>
+              <div className="flex items-center gap-1.5"><User size={13} className="text-slate-500" />
+                {onViewProfile
+                  ? <button onClick={() => { onViewProfile(sheet.uploadedBy); setIsMobileMenuOpen(false); }} className={`text-xs font-semibold hover:text-green-500 transition-colors ${textPrimary}`}>{sheet.uploadedBy.split('@')[0]}</button>
+                  : <span className={`text-xs font-semibold ${textPrimary}`}>{sheet.uploadedBy.split('@')[0]}</span>}
+              </div>
+            </div>
+            {/* Action buttons row */}
+            <div className="flex items-center gap-2">
+              <button onClick={onThemeToggle}
+                className={`p-2.5 rounded-xl border flex-1 flex justify-center transition-colors ${darkMode ? 'border-slate-800 text-slate-400 hover:text-white' : 'border-slate-200 text-slate-500 hover:text-slate-900'}`}>
+                {darkMode ? <Sun size={18} /> : <Moon size={18} />}</button>
+              <button onClick={handleOpenNewTab}
+                className={`p-2.5 rounded-xl border flex-1 flex justify-center transition-colors ${darkMode ? 'border-slate-800 text-slate-400 hover:text-white' : 'border-slate-200 text-slate-500 hover:text-slate-900'}`}>
+                <ExternalLink size={18} /></button>
+              <button onClick={handleShare}
+                className={`p-2.5 rounded-xl border flex-1 flex justify-center transition-colors ${darkMode ? 'border-slate-800 text-slate-400 hover:text-white' : 'border-slate-200 text-slate-500 hover:text-slate-900'}`}>
+                <Share2 size={18} /></button>
+              <button onClick={toggleFavorite} disabled={favLoading}
+                className={`p-2.5 rounded-xl border flex-1 flex justify-center transition-colors ${isFavorited ? 'border-rose-500/50 text-rose-500 bg-rose-500/10' : darkMode ? 'border-slate-800 text-slate-400 hover:text-rose-400' : 'border-slate-200 text-slate-500 hover:text-rose-500'}`}>
+                <Heart size={18} className={isFavorited ? 'fill-current' : ''} /></button>
+              <div className="relative flex-1" ref={collectionDropRef}>
+                <button onClick={handleAddToCollection}
+                  className={`w-full p-2.5 rounded-xl border flex justify-center transition-colors ${showCollectionDropdown ? (darkMode ? 'border-green-500/50 text-green-500 bg-green-500/10' : 'border-green-500/50 text-green-600 bg-green-500/10') : darkMode ? 'border-slate-800 text-slate-400 hover:text-white' : 'border-slate-200 text-slate-500 hover:text-slate-900'}`}>
+                  <FolderPlus size={18} /></button>
+                {showCollectionDropdown && currentUserId && (
+                  <AddToCollectionDropdown
+                    sheetId={sheet.id}
+                    currentUserId={currentUserId}
+                    darkMode={darkMode}
+                    onClose={() => setShowCollectionDropdown(false)}
+                    onNavigateCollections={onNavigateCollections}
+                  />
+                )}
+              </div>
+              <button onClick={handlePrint}
+                className={`p-2.5 rounded-xl border flex-1 flex justify-center transition-colors ${darkMode ? 'border-slate-800 text-slate-400 hover:text-white' : 'border-slate-200 text-slate-500 hover:text-slate-900'}`}>
+                <Printer size={18} /></button>
+            </div>
+          </div>
+        )}
       </header>
 
       <main className="flex-1 overflow-y-auto w-full px-4 md:px-8 flex flex-col items-center pt-2 md:pt-4 [will-change:transform]">
