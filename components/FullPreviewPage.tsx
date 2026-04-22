@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { Download, Share2, Printer, Eye, Calendar, User, FileText, Music as MusicIcon, X, Moon, Sun, ExternalLink, Menu, ChevronUp, Loader2, AlertTriangle, AlertCircle, Heart, FolderPlus, Trash2, MessageSquare, Send } from 'lucide-react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { Download, Share2, Eye, Calendar, User, FileText, Music as MusicIcon, X, ExternalLink, Menu, ChevronUp, Loader2, AlertTriangle, AlertCircle, Heart, FolderPlus, Trash2, MessageSquare, Send } from 'lucide-react';
 import { MusicSheet, Comment, Collection } from '../types';
 import { db } from '../supabase';
 import { getPdfUrl } from '../utils/signedUrl';
@@ -740,40 +740,51 @@ const FullPreviewPage: React.FC<FullPreviewPageProps> = ({
     };
   }, [sheet?.id, sheet?.pdfUrl, pdfLoadKey]);
 
-  const trackInteraction = async (type: 'views' | 'downloads') => {
+  const trackInteraction = useCallback(async (type: 'views' | 'downloads') => {
     if (!sheet) return;
 
+    // Views: deduplicated per browser (one view per sheet per browser lifetime).
+    // Downloads: no dedup — every click counts as a new download event.
     const storageKey = `solfa_${type}_${sheet.id}`;
-    if (localStorage.getItem(storageKey)) return;
+    if (type === 'views' && localStorage.getItem(storageKey)) return;
 
     if (type === 'views') setLocalViews(v => v + 1);
     else setLocalDownloads(d => d + 1);
 
-    localStorage.setItem(storageKey, '1');
+    if (type === 'views') localStorage.setItem(storageKey, '1');
 
     try {
       const { data: { session } } = await db.auth.getSession();
       const user = session?.user ?? null;
 
+      // Admin and uploader views/downloads don't count
       if (user?.email === 'solfasanctuary@gmail.com' || user?.email === sheet.uploadedBy) {
-        if (type === 'views') setLocalViews(v => v - 1);
+        if (type === 'views') { setLocalViews(v => v - 1); localStorage.removeItem(storageKey); }
         else setLocalDownloads(d => d - 1);
-        localStorage.removeItem(storageKey);
         return;
       }
 
       if (user) {
-        const interactionId = `${user.id}_${sheet.id}_${type}`;
+        // For views: composite key prevents DB duplicates for logged-in users.
+        // For downloads: always insert a new row (total events).
+        const interactionId = type === 'views'
+          ? `${user.id}_${sheet.id}_views`
+          : `${user.id}_${sheet.id}_download_${Date.now()}`;
+
         const { error: insertError } = await db.from('interactions').insert({
           id: interactionId,
           user_id: user.id,
           sheet_id: sheet.id,
           type,
         });
-        if (insertError) {
-          if (type === 'views') setLocalViews(v => v - 1);
-          else setLocalDownloads(d => d - 1);
+
+        if (insertError && type === 'views') {
+          // View already recorded in DB — roll back optimistic increment
+          setLocalViews(v => v - 1);
           return;
+        }
+        if (insertError && type === 'downloads') {
+          // DB write failed — still fire the counter RPC (best-effort)
         }
       }
 
@@ -782,9 +793,9 @@ const FullPreviewPage: React.FC<FullPreviewPageProps> = ({
         p_field: type,
       });
     } catch {
-      // silently ignore
+      // silently ignore network errors
     }
-  };
+  }, [sheet]);
 
   useEffect(() => {
     if (sheet) {
@@ -827,10 +838,17 @@ const FullPreviewPage: React.FC<FullPreviewPageProps> = ({
 
   const handleDownload = () => handleProtectedAction(() => {
     trackInteraction('downloads');
+    // Append ?download=true so Supabase Storage sets Content-Disposition: attachment,
+    // forcing a real OS Save dialog even for cross-origin URLs.
+    const base = resolvedPdfUrl || sheet?.pdfUrl || '';
+    const url = base ? (base.includes('?') ? `${base}&download=true` : `${base}?download=true`) : '';
+    if (!url) return;
     const a = document.createElement('a');
-    a.href = resolvedPdfUrl || sheet?.pdfUrl || '';
+    a.href = url;
     a.download = `${sheet?.title ?? 'sheet'}.pdf`;
+    document.body.appendChild(a);
     a.click();
+    document.body.removeChild(a);
   });
 
   const handleShare = () => {
@@ -839,11 +857,6 @@ const FullPreviewPage: React.FC<FullPreviewPageProps> = ({
       setTimeout(() => setCopiedToast(false), 2000);
     }).catch(() => {});
   };
-
-  const handlePrint = () => handleProtectedAction(() => {
-    const url = resolvedPdfUrl || sheet?.pdfUrl;
-    if (url) window.open(url, '_blank');
-  });
 
   const handleAddToCollection = () => {
     if (!isLoggedIn) { onAuthRequired(); return; }
@@ -892,8 +905,8 @@ const FullPreviewPage: React.FC<FullPreviewPageProps> = ({
           <div className={`hidden md:flex items-center gap-3 lg:gap-5 shrink-0 border-l pl-4 lg:pl-6 ${darkMode ? 'border-slate-700/50' : 'border-slate-300/60'}`}>
             <div className="flex items-center gap-1.5"><MusicIcon size={13} className="text-slate-500 shrink-0" /><span className={`text-[11px] font-semibold whitespace-nowrap ${textPrimary}`}>{sheet.type}</span></div>
             <div className="flex items-center gap-1.5"><FileText size={13} className="text-slate-500 shrink-0" /><span className={`text-[11px] font-semibold whitespace-nowrap ${textPrimary}`}>{sheet.fileSize}</span></div>
-            <div className="hidden lg:flex items-center gap-1.5"><Calendar size={13} className="text-slate-500 shrink-0" /><span className={`text-[11px] font-semibold whitespace-nowrap ${textPrimary}`}>{sheet.uploadedAt}</span></div>
-            <div className="hidden lg:flex items-center gap-1.5"><User size={13} className="text-slate-500 shrink-0" />
+            <div className="hidden xl:flex items-center gap-1.5"><Calendar size={13} className="text-slate-500 shrink-0" /><span className={`text-[11px] font-semibold whitespace-nowrap ${textPrimary}`}>{sheet.uploadedAt}</span></div>
+            <div className="hidden xl:flex items-center gap-1.5"><User size={13} className="text-slate-500 shrink-0" />
               {onViewProfile
                 ? <button onClick={() => onViewProfile(sheet.uploadedBy)} className={`text-[11px] font-semibold whitespace-nowrap hover:text-green-500 transition-colors ${textPrimary}`}>{sheet.uploadedBy.split('@')[0]}</button>
                 : <span className={`text-[11px] font-semibold whitespace-nowrap ${textPrimary}`}>{sheet.uploadedBy.split('@')[0]}</span>}
@@ -902,9 +915,6 @@ const FullPreviewPage: React.FC<FullPreviewPageProps> = ({
 
           {/* Action buttons — hidden below md */}
           <div className={`hidden md:flex items-center gap-1.5 lg:gap-2 shrink-0 border-l pl-3 md:pl-4 ${darkMode ? 'border-slate-700/50' : 'border-slate-300/60'}`}>
-            <button onClick={onThemeToggle} aria-label={darkMode ? 'Light mode' : 'Dark mode'}
-              className={`p-2 rounded-xl border transition-colors ${darkMode ? 'border-slate-800 text-slate-400 hover:text-white hover:bg-slate-900' : 'border-slate-200 text-slate-500 hover:text-slate-900 hover:bg-slate-50'}`}
-              title="Toggle Theme">{darkMode ? <Sun size={17} /> : <Moon size={17} />}</button>
             <button onClick={handleOpenNewTab} aria-label="Open in new tab"
               className={`p-2 rounded-xl border transition-colors ${darkMode ? 'border-slate-800 text-slate-400 hover:text-white hover:bg-slate-900' : 'border-slate-200 text-slate-500 hover:text-slate-900 hover:bg-slate-50 shadow-sm'}`}
               title="Open in new tab"><ExternalLink size={17} /></button>
@@ -932,9 +942,6 @@ const FullPreviewPage: React.FC<FullPreviewPageProps> = ({
                 />
               )}
             </div>
-            <button onClick={handlePrint} aria-label="Print sheet"
-              className={`p-2 rounded-xl border transition-colors ${darkMode ? 'border-slate-800 text-slate-400 hover:text-white hover:bg-slate-900' : 'border-slate-200 text-slate-500 hover:text-slate-900 hover:bg-slate-50 shadow-sm'}`}
-              title="Open PDF for printing"><Printer size={17} /></button>
           </div>
 
           {/* Mobile menu toggle (below md) */}
@@ -966,9 +973,6 @@ const FullPreviewPage: React.FC<FullPreviewPageProps> = ({
             </div>
             {/* Action buttons row */}
             <div className="flex items-center gap-2">
-              <button onClick={onThemeToggle}
-                className={`p-2.5 rounded-xl border flex-1 flex justify-center transition-colors ${darkMode ? 'border-slate-800 text-slate-400 hover:text-white' : 'border-slate-200 text-slate-500 hover:text-slate-900'}`}>
-                {darkMode ? <Sun size={18} /> : <Moon size={18} />}</button>
               <button onClick={handleOpenNewTab}
                 className={`p-2.5 rounded-xl border flex-1 flex justify-center transition-colors ${darkMode ? 'border-slate-800 text-slate-400 hover:text-white' : 'border-slate-200 text-slate-500 hover:text-slate-900'}`}>
                 <ExternalLink size={18} /></button>
@@ -992,9 +996,6 @@ const FullPreviewPage: React.FC<FullPreviewPageProps> = ({
                   />
                 )}
               </div>
-              <button onClick={handlePrint}
-                className={`p-2.5 rounded-xl border flex-1 flex justify-center transition-colors ${darkMode ? 'border-slate-800 text-slate-400 hover:text-white' : 'border-slate-200 text-slate-500 hover:text-slate-900'}`}>
-                <Printer size={18} /></button>
             </div>
           </div>
         )}
