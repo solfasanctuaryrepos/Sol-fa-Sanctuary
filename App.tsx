@@ -39,6 +39,7 @@ interface RawSheetRow {
   thumbnail_url: string;
   pdf_url: string;
   uploaded_by: string;
+  comments_count?: number;
 }
 
 const App: React.FC = () => {
@@ -85,7 +86,8 @@ const App: React.FC = () => {
               isAdminRestricted: data.is_admin_restricted,
               thumbnailUrl: data.thumbnail_url,
               pdfUrl: data.pdf_url,
-              uploadedBy: data.uploaded_by
+              uploadedBy: data.uploaded_by,
+              commentsCount: data.comments_count ?? 0,
             };
             setActivePreview(mappedSheet);
           }
@@ -123,6 +125,7 @@ const App: React.FC = () => {
     thumbnailUrl: s.thumbnail_url,
     pdfUrl: s.pdf_url,
     uploadedBy: s.uploaded_by,
+    commentsCount: s.comments_count ?? 0,
   });
 
   // Builds the correct query for the current view + user combination.

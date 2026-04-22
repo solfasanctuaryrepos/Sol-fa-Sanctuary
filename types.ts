@@ -10,6 +10,10 @@ export interface Comment {
   displayName: string | null;
   body: string;
   createdAt: string;
+  parentId: string | null;
+  likesCount: number;
+  likedByMe: boolean;
+  replies?: Comment[];
 }
 
 export interface Collection {
@@ -32,6 +36,7 @@ export interface MusicSheet {
   fileSize: string;
   views: number;
   downloads: number;
+  commentsCount: number;
   isPublic: boolean;
   isAdminRestricted: boolean;
   thumbnailUrl: string;

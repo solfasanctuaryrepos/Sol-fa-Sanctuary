@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Download, Share2, Eye, Calendar, User, FileText, Music as MusicIcon, X, ExternalLink, Menu, ChevronUp, Loader2, AlertTriangle, AlertCircle, Heart, FolderPlus, Trash2, MessageSquare, Send } from 'lucide-react';
+import { Download, Share2, Eye, Calendar, User, FileText, Music as MusicIcon, X, ExternalLink, Menu, ChevronUp, Loader2, AlertTriangle, AlertCircle, Heart, FolderPlus, Trash2, MessageSquare, Send, CornerDownRight, ChevronDown, ChevronRight } from 'lucide-react';
 import { MusicSheet, Comment, Collection } from '../types';
 import { db } from '../supabase';
 import { getPdfUrl } from '../utils/signedUrl';
@@ -171,7 +171,192 @@ interface CommentsSectionProps {
   currentUserDisplayName?: string;
   isAdmin?: boolean;
   darkMode: boolean;
+  onCountChange?: (n: number) => void;
 }
+
+// Map a raw DB comment row → Comment
+const mapComment = (c: any, likedIds: Set<string>): Comment => ({
+  id: c.id,
+  sheetId: c.sheet_id,
+  userId: c.user_id,
+  userEmail: c.user_email,
+  displayName: c.display_name,
+  body: c.body,
+  createdAt: c.created_at,
+  parentId: c.parent_id ?? null,
+  likesCount: c.likes_count ?? 0,
+  likedByMe: likedIds.has(c.id),
+});
+
+// ── Single comment + replies sub-component ──
+interface CommentCardProps {
+  comment: Comment;
+  isReply?: boolean;
+  darkMode: boolean;
+  currentUserId?: string;
+  currentUserEmail?: string;
+  currentUserDisplayName?: string;
+  isAdmin?: boolean;
+  onLike: (id: string) => void;
+  onReply: (parentId: string, body: string) => Promise<void>;
+  onDelete: (id: string) => void;
+  confirmDeleteId: string | null;
+  setConfirmDeleteId: (id: string | null) => void;
+  liking: string | null;
+}
+
+const CommentCard: React.FC<CommentCardProps> = ({
+  comment, isReply, darkMode, currentUserId, currentUserDisplayName,
+  isAdmin, onLike, onReply, onDelete, confirmDeleteId, setConfirmDeleteId, liking,
+}) => {
+  const [showReplyBox, setShowReplyBox] = useState(false);
+  const [replyBody, setReplyBody] = useState('');
+  const [posting, setPosting] = useState(false);
+  const [showReplies, setShowReplies] = useState(true);
+  const replyRef = useRef<HTMLTextAreaElement>(null);
+
+  const textPrimary = darkMode ? 'text-slate-100' : 'text-slate-900';
+  const textSecondary = darkMode ? 'text-slate-400' : 'text-slate-600';
+  const cardBg = darkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200';
+  const replyBg = darkMode ? 'bg-slate-800/60 border-slate-700' : 'bg-slate-50 border-slate-200';
+
+  const name = comment.displayName || comment.userEmail.split('@')[0];
+  const initials = name.slice(0, 2).toUpperCase();
+  const isOwn = currentUserId && comment.userId === currentUserId;
+  const canDel = isOwn || isAdmin;
+  const replies = comment.replies ?? [];
+
+  const submitReply = async () => {
+    if (!replyBody.trim() || posting) return;
+    setPosting(true);
+    await onReply(comment.id, replyBody.trim());
+    setReplyBody('');
+    setShowReplyBox(false);
+    setShowReplies(true);
+    setPosting(false);
+  };
+
+  return (
+    <div className={`flex gap-3 p-4 rounded-2xl border transition-all ${isReply ? replyBg : cardBg} ${comment.id.startsWith('temp-') ? 'opacity-60' : ''}`}>
+      {/* Avatar */}
+      <div className={`shrink-0 flex items-center justify-center text-xs font-bold rounded-full border ${isReply ? 'w-7 h-7 text-[10px]' : 'w-9 h-9'} bg-green-500/10 border-green-500/20 text-green-500`}>
+        {initials}
+      </div>
+
+      <div className="flex-1 min-w-0">
+        {/* Name + time */}
+        <div className="flex items-baseline gap-2 flex-wrap mb-1">
+          <span className={`text-sm font-bold ${textPrimary}`}>{name}</span>
+          <span className={`text-xs ${textSecondary}`}>{timeAgo(comment.createdAt)}</span>
+        </div>
+
+        {/* Body */}
+        <p className={`text-sm leading-relaxed break-words ${textSecondary}`}>{comment.body}</p>
+
+        {/* Action row */}
+        <div className="flex items-center gap-3 mt-2 flex-wrap">
+          {/* Like */}
+          <button
+            onClick={() => onLike(comment.id)}
+            disabled={!currentUserId || !!liking}
+            title={currentUserId ? (comment.likedByMe ? 'Unlike' : 'Like') : 'Sign in to like'}
+            className={`flex items-center gap-1 text-xs font-semibold transition-all active:scale-95 disabled:opacity-40 ${comment.likedByMe ? 'text-rose-500' : darkMode ? 'text-slate-500 hover:text-rose-400' : 'text-slate-400 hover:text-rose-500'}`}
+          >
+            <Heart size={13} className={comment.likedByMe ? 'fill-current' : ''} />
+            {comment.likesCount > 0 && <span>{comment.likesCount}</span>}
+          </button>
+
+          {/* Reply — only on top-level */}
+          {!isReply && currentUserId && (
+            <button
+              onClick={() => { setShowReplyBox(v => !v); setTimeout(() => replyRef.current?.focus(), 50); }}
+              className={`flex items-center gap-1 text-xs font-semibold transition-colors ${darkMode ? 'text-slate-500 hover:text-slate-300' : 'text-slate-400 hover:text-slate-700'}`}
+            >
+              <CornerDownRight size={13} />
+              Reply
+            </button>
+          )}
+
+          {/* Delete */}
+          {canDel && !comment.id.startsWith('temp-') && (
+            confirmDeleteId === comment.id ? (
+              <span className="flex items-center gap-1.5 text-xs">
+                <span className={textSecondary}>Delete?</span>
+                <button onClick={() => onDelete(comment.id)} className="px-1.5 py-0.5 text-[11px] bg-red-500 text-white rounded font-bold hover:bg-red-600 transition-colors">Yes</button>
+                <button onClick={() => setConfirmDeleteId(null)} className={`px-1.5 py-0.5 text-[11px] rounded font-bold transition-colors ${darkMode ? 'bg-slate-700 text-slate-300 hover:bg-slate-600' : 'bg-slate-200 text-slate-600 hover:bg-slate-300'}`}>No</button>
+              </span>
+            ) : (
+              <button onClick={() => setConfirmDeleteId(comment.id)} className={`flex items-center gap-1 text-xs transition-colors ${darkMode ? 'text-slate-600 hover:text-red-400' : 'text-slate-400 hover:text-red-500'}`}>
+                <Trash2 size={12} /> Delete
+              </button>
+            )
+          )}
+        </div>
+
+        {/* Reply input box */}
+        {showReplyBox && (
+          <div className={`mt-3 rounded-xl border p-3 ${darkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200 shadow-sm'}`}>
+            <textarea
+              ref={replyRef}
+              value={replyBody}
+              onChange={e => setReplyBody(e.target.value.slice(0, 500))}
+              placeholder={`Reply to ${name}…`}
+              rows={2}
+              className={`w-full bg-transparent resize-none text-sm focus:outline-none ${textPrimary} placeholder:text-slate-500`}
+            />
+            <div className="flex items-center justify-between mt-2">
+              <span className={`text-xs ${replyBody.length > 450 ? 'text-amber-500' : textSecondary}`}>{replyBody.length}/500</span>
+              <div className="flex gap-2">
+                <button onClick={() => { setShowReplyBox(false); setReplyBody(''); }} className={`px-3 py-1.5 text-xs rounded-lg font-semibold transition-colors ${darkMode ? 'text-slate-400 hover:text-slate-200' : 'text-slate-500 hover:text-slate-700'}`}>Cancel</button>
+                <button
+                  onClick={submitReply}
+                  disabled={!replyBody.trim() || posting}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-green-500 hover:bg-green-600 disabled:opacity-50 text-slate-950 text-xs font-bold rounded-lg transition-all active:scale-95"
+                >
+                  {posting ? <Loader2 size={12} className="animate-spin" /> : <Send size={12} />} Reply
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Replies */}
+        {replies.length > 0 && (
+          <div className="mt-3">
+            <button
+              onClick={() => setShowReplies(v => !v)}
+              className={`flex items-center gap-1 text-xs font-semibold mb-2 transition-colors ${darkMode ? 'text-slate-400 hover:text-slate-200' : 'text-slate-500 hover:text-slate-700'}`}
+            >
+              {showReplies ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
+              {replies.length} {replies.length === 1 ? 'reply' : 'replies'}
+            </button>
+            {showReplies && (
+              <div className="space-y-2 pl-1 border-l-2 border-green-500/20 ml-1">
+                {replies.map(reply => (
+                  <CommentCard
+                    key={reply.id}
+                    comment={reply}
+                    isReply
+                    darkMode={darkMode}
+                    currentUserId={currentUserId}
+                    currentUserDisplayName={currentUserDisplayName}
+                    isAdmin={isAdmin}
+                    onLike={onLike}
+                    onReply={onReply}
+                    onDelete={onDelete}
+                    confirmDeleteId={confirmDeleteId}
+                    setConfirmDeleteId={setConfirmDeleteId}
+                    liking={liking}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
 
 const CommentsSection: React.FC<CommentsSectionProps> = ({
   sheetId,
@@ -180,161 +365,179 @@ const CommentsSection: React.FC<CommentsSectionProps> = ({
   currentUserDisplayName,
   isAdmin,
   darkMode,
+  onCountChange,
 }) => {
-  const [comments, setComments] = useState<Comment[]>([]);
+  const [flat, setFlat] = useState<Comment[]>([]);
   const [loading, setLoading] = useState(true);
   const [body, setBody] = useState('');
   const [posting, setPosting] = useState(false);
   const [postError, setPostError] = useState<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [liking, setLiking] = useState<string | null>(null);
 
   const textPrimary = darkMode ? 'text-slate-100' : 'text-slate-900';
   const textSecondary = darkMode ? 'text-slate-400' : 'text-slate-600';
   const cardBg = darkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200';
 
-  // Fetch comments on mount
+  // Build tree from flat list
+  const tree = React.useMemo<Comment[]>(() => {
+    const topLevel = flat.filter(c => !c.parentId);
+    return topLevel.map(c => ({
+      ...c,
+      replies: flat.filter(r => r.parentId === c.id).sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()),
+    }));
+  }, [flat]);
+
+  // Total count for badge (top-level + replies)
+  const totalCount = flat.filter(c => !c.id.startsWith('temp-')).length;
+  useEffect(() => { onCountChange?.(totalCount); }, [totalCount, onCountChange]);
+
+  // Fetch all comments + my likes
   useEffect(() => {
-    const fetchComments = async () => {
+    const fetchAll = async () => {
       setLoading(true);
-      const { data, error } = await db
-        .from('comments')
-        .select('*')
-        .eq('sheet_id', sheetId)
-        .order('created_at', { ascending: true });
-      if (!error && data) {
-        setComments(data.map((c: any) => ({
-          id: c.id,
-          sheetId: c.sheet_id,
-          userId: c.user_id,
-          userEmail: c.user_email,
-          displayName: c.display_name,
-          body: c.body,
-          createdAt: c.created_at,
-        })));
+      const [commentsRes, likesRes] = await Promise.all([
+        db.from('comments').select('*').eq('sheet_id', sheetId).order('created_at', { ascending: true }),
+        currentUserId
+          ? db.from('comment_likes').select('comment_id').eq('user_id', currentUserId)
+          : Promise.resolve({ data: [], error: null }),
+      ]);
+      const likedIds = new Set<string>((likesRes.data || []).map((l: any) => l.comment_id));
+      if (!commentsRes.error && commentsRes.data) {
+        setFlat(commentsRes.data.map((c: any) => mapComment(c, likedIds)));
       }
       setLoading(false);
     };
-    fetchComments();
-  }, [sheetId]);
+    fetchAll();
+  }, [sheetId, currentUserId]);
 
-  // Realtime subscription
+  // Realtime — comments table
   useEffect(() => {
-    const channel = db
-      .channel('comments:' + sheetId)
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'comments', filter: `sheet_id=eq.${sheetId}` },
-        (payload: any) => {
-          if (payload.eventType === 'INSERT') {
-            const c = payload.new;
-            const mapped: Comment = {
-              id: c.id,
-              sheetId: c.sheet_id,
-              userId: c.user_id,
-              userEmail: c.user_email,
-              displayName: c.display_name,
-              body: c.body,
-              createdAt: c.created_at,
-            };
-            setComments(prev => {
-              // Avoid dupes (optimistic entry already present)
-              if (prev.some(x => x.id === mapped.id)) return prev;
-              return [...prev, mapped];
-            });
-          } else if (payload.eventType === 'DELETE') {
-            setComments(prev => prev.filter(c => c.id !== payload.old.id));
-          }
+    const ch = db
+      .channel(`comments:sheet:${sheetId}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'comments', filter: `sheet_id=eq.${sheetId}` }, (payload: any) => {
+        if (payload.eventType === 'INSERT') {
+          const c = payload.new;
+          const mapped: Comment = mapComment(c, new Set<string>());
+          setFlat(prev => {
+            if (prev.some(x => x.id === mapped.id)) return prev;
+            return [...prev, mapped];
+          });
+        } else if (payload.eventType === 'DELETE') {
+          setFlat(prev => prev.filter(c => c.id !== payload.old.id));
+        } else if (payload.eventType === 'UPDATE') {
+          const c = payload.new;
+          setFlat(prev => prev.map(x => x.id === c.id ? { ...x, likesCount: c.likes_count ?? x.likesCount } : x));
         }
-      )
+      })
       .subscribe();
-    return () => { db.removeChannel(channel); };
+    return () => { db.removeChannel(ch); };
   }, [sheetId]);
 
+  // Post top-level comment
   const handlePost = async () => {
     if (!body.trim() || !currentUserId || !currentUserEmail) return;
     setPosting(true);
     setPostError(null);
-
     const tempId = `temp-${Date.now()}`;
     const optimistic: Comment = {
-      id: tempId,
-      sheetId,
-      userId: currentUserId,
-      userEmail: currentUserEmail,
-      displayName: currentUserDisplayName ?? null,
-      body: body.trim(),
-      createdAt: new Date().toISOString(),
+      id: tempId, sheetId, userId: currentUserId, userEmail: currentUserEmail,
+      displayName: currentUserDisplayName ?? null, body: body.trim(),
+      createdAt: new Date().toISOString(), parentId: null, likesCount: 0, likedByMe: false,
     };
-    setComments(prev => [...prev, optimistic]);
-    const submittedBody = body.trim();
+    setFlat(prev => [...prev, optimistic]);
+    const saved = body.trim();
     setBody('');
-
     try {
       const { data, error } = await db
         .from('comments')
-        .insert({
-          sheet_id: sheetId,
-          user_id: currentUserId,
-          user_email: currentUserEmail,
-          display_name: currentUserDisplayName ?? null,
-          body: submittedBody,
-        })
-        .select()
-        .single();
-
+        .insert({ sheet_id: sheetId, user_id: currentUserId, user_email: currentUserEmail, display_name: currentUserDisplayName ?? null, body: saved })
+        .select().single();
       if (error) throw error;
-      const real: Comment = {
-        id: data.id,
-        sheetId: data.sheet_id,
-        userId: data.user_id,
-        userEmail: data.user_email,
-        displayName: data.display_name,
-        body: data.body,
-        createdAt: data.created_at,
-      };
-      setComments(prev => prev.map(c => c.id === tempId ? real : c));
+      setFlat(prev => prev.map(c => c.id === tempId ? mapComment(data, new Set<string>()) : c));
+      // Increment denormalized count
+      await db.rpc('increment_sheet_counter', { p_sheet_id: sheetId, p_field: 'comments' });
     } catch {
-      setComments(prev => prev.filter(c => c.id !== tempId));
+      setFlat(prev => prev.filter(c => c.id !== tempId));
       setPostError('Failed to post comment. Please try again.');
     } finally {
       setPosting(false);
     }
   };
 
+  // Post reply
+  const handleReply = async (parentId: string, replyBody: string) => {
+    if (!currentUserId || !currentUserEmail) return;
+    const tempId = `temp-reply-${Date.now()}`;
+    const optimistic: Comment = {
+      id: tempId, sheetId, userId: currentUserId, userEmail: currentUserEmail,
+      displayName: currentUserDisplayName ?? null, body: replyBody,
+      createdAt: new Date().toISOString(), parentId, likesCount: 0, likedByMe: false,
+    };
+    setFlat(prev => [...prev, optimistic]);
+    try {
+      const { data, error } = await db
+        .from('comments')
+        .insert({ sheet_id: sheetId, user_id: currentUserId, user_email: currentUserEmail, display_name: currentUserDisplayName ?? null, body: replyBody, parent_id: parentId })
+        .select().single();
+      if (error) throw error;
+      setFlat(prev => prev.map(c => c.id === tempId ? mapComment(data, new Set<string>()) : c));
+      await db.rpc('increment_sheet_counter', { p_sheet_id: sheetId, p_field: 'comments' });
+    } catch {
+      setFlat(prev => prev.filter(c => c.id !== tempId));
+    }
+  };
+
+  // Toggle like
+  const handleLike = async (commentId: string) => {
+    if (!currentUserId) return;
+    setLiking(commentId);
+    const prev = flat.find(c => c.id === commentId);
+    if (!prev) { setLiking(null); return; }
+    // Optimistic
+    setFlat(fs => fs.map(c => c.id === commentId
+      ? { ...c, likedByMe: !c.likedByMe, likesCount: c.likedByMe ? Math.max(0, c.likesCount - 1) : c.likesCount + 1 }
+      : c));
+    try {
+      await db.rpc('toggle_comment_like', { p_comment_id: commentId, p_user_id: currentUserId });
+    } catch {
+      // Rollback
+      setFlat(fs => fs.map(c => c.id === commentId ? prev : c));
+    } finally {
+      setLiking(null);
+    }
+  };
+
+  // Delete comment (cascades replies via DB)
   const handleDelete = async (commentId: string) => {
     setConfirmDeleteId(null);
-    setComments(prev => prev.filter(c => c.id !== commentId));
+    const removed = flat.filter(c => c.id === commentId || c.parentId === commentId);
+    setFlat(prev => prev.filter(c => c.id !== commentId && c.parentId !== commentId));
     try {
       await db.from('comments').delete().eq('id', commentId);
+      // Decrement count for deleted comment + its replies
+      for (let i = 0; i < removed.length; i++) {
+        await db.rpc('increment_sheet_counter', { p_sheet_id: sheetId, p_field: 'comments_dec' });
+      }
     } catch {
       // silently ignore — realtime will reconcile
     }
   };
 
-  const getInitials = (comment: Comment) => {
-    const name = comment.displayName || comment.userEmail.split('@')[0];
-    return name.slice(0, 2).toUpperCase();
-  };
-
-  const getDisplayName = (comment: Comment) => {
-    return comment.displayName || comment.userEmail.split('@')[0];
-  };
-
-  const isOwnComment = (comment: Comment) => currentUserId && comment.userId === currentUserId;
-  const canDelete = (comment: Comment) => isOwnComment(comment) || isAdmin;
-
   return (
-    <div className="mt-8 mb-4 no-print">
+    <div className="mt-8 mb-4 no-print" id="comments-section">
+      {/* Header */}
       <div className="flex items-center gap-3 mb-4">
         <MessageSquare size={20} className="text-green-500" />
         <h2 className={`text-lg font-serif font-bold ${textPrimary}`}>Comments</h2>
         {!loading && (
           <span className="px-2 py-0.5 bg-green-500/10 text-green-500 text-xs font-bold rounded-full border border-green-500/20">
-            {comments.length}
+            {totalCount}
           </span>
         )}
       </div>
 
+      {/* Loading skeletons */}
       {loading ? (
         <div className="space-y-3">
           {[1, 2, 3].map(i => (
@@ -348,54 +551,33 @@ const CommentsSection: React.FC<CommentsSectionProps> = ({
             </div>
           ))}
         </div>
-      ) : comments.length === 0 ? (
+      ) : tree.length === 0 ? (
         <div className={`py-10 text-center border-2 border-dashed rounded-2xl ${darkMode ? 'border-slate-800 text-slate-500' : 'border-slate-200 text-slate-400'}`}>
           <MessageSquare size={32} className="mx-auto mb-2 opacity-30" />
           <p className="text-sm">Be the first to comment on this sheet.</p>
         </div>
       ) : (
         <div className="space-y-3">
-          {comments.map(comment => (
-            <div key={comment.id} className={`flex gap-3 p-4 rounded-2xl border transition-all ${cardBg} ${comment.id.startsWith('temp-') ? 'opacity-60' : ''}`}>
-              <div className="w-9 h-9 rounded-full bg-green-500/10 border border-green-500/20 flex items-center justify-center text-green-500 text-xs font-bold shrink-0">
-                {getInitials(comment)}
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-baseline gap-2 flex-wrap mb-1">
-                  <span className={`text-sm font-bold ${textPrimary}`}>{getDisplayName(comment)}</span>
-                  <span className={`text-xs ${textSecondary}`}>{timeAgo(comment.createdAt)}</span>
-                </div>
-                <p className={`text-sm leading-relaxed break-words ${textSecondary}`}>{comment.body}</p>
-                {confirmDeleteId === comment.id ? (
-                  <div className="flex items-center gap-2 mt-2">
-                    <span className={`text-xs ${textSecondary}`}>Really delete?</span>
-                    <button
-                      onClick={() => handleDelete(comment.id)}
-                      className="px-2 py-0.5 text-xs bg-red-500 text-white rounded-lg font-bold hover:bg-red-600 transition-colors"
-                    >
-                      Yes
-                    </button>
-                    <button
-                      onClick={() => setConfirmDeleteId(null)}
-                      className={`px-2 py-0.5 text-xs rounded-lg font-bold transition-colors ${darkMode ? 'bg-slate-800 text-slate-300 hover:bg-slate-700' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
-                    >
-                      No
-                    </button>
-                  </div>
-                ) : canDelete(comment) && !comment.id.startsWith('temp-') ? (
-                  <button
-                    onClick={() => setConfirmDeleteId(comment.id)}
-                    className={`mt-1 flex items-center gap-1 text-xs transition-colors ${darkMode ? 'text-slate-600 hover:text-red-400' : 'text-slate-400 hover:text-red-500'}`}
-                  >
-                    <Trash2 size={12} /> Delete
-                  </button>
-                ) : null}
-              </div>
-            </div>
+          {tree.map(comment => (
+            <CommentCard
+              key={comment.id}
+              comment={comment}
+              darkMode={darkMode}
+              currentUserId={currentUserId}
+              currentUserDisplayName={currentUserDisplayName}
+              isAdmin={isAdmin}
+              onLike={handleLike}
+              onReply={handleReply}
+              onDelete={handleDelete}
+              confirmDeleteId={confirmDeleteId}
+              setConfirmDeleteId={setConfirmDeleteId}
+              liking={liking}
+            />
           ))}
         </div>
       )}
 
+      {/* New top-level comment box */}
       {currentUserId ? (
         <div className="mt-4">
           <div className={`rounded-2xl border p-4 ${cardBg}`}>
@@ -428,9 +610,7 @@ const CommentsSection: React.FC<CommentsSectionProps> = ({
         </div>
       ) : (
         <div className={`mt-4 py-4 text-center rounded-2xl border ${cardBg}`}>
-          <p className={`text-sm ${textSecondary}`}>
-            Sign in to join the discussion
-          </p>
+          <p className={`text-sm ${textSecondary}`}>Sign in to join the discussion</p>
         </div>
       )}
     </div>
@@ -658,7 +838,13 @@ const FullPreviewPage: React.FC<FullPreviewPageProps> = ({
   const [isFavorited, setIsFavorited] = useState(false);
   const [favLoading, setFavLoading] = useState(false);
   const [showCollectionDropdown, setShowCollectionDropdown] = useState(false);
+  const [localCommentsCount, setLocalCommentsCount] = useState(sheet?.commentsCount ?? 0);
   const collectionDropRef = useRef<HTMLDivElement>(null);
+  const commentsSectionRef = useRef<HTMLDivElement>(null);
+
+  const scrollToComments = () => {
+    commentsSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
 
   useEffect(() => {
     setLocalViews(sheet?.views ?? 0);
@@ -895,21 +1081,28 @@ const FullPreviewPage: React.FC<FullPreviewPageProps> = ({
             <p className="text-green-500 font-medium text-[11px] truncate">{sheet.composer}</p>
           </div>
 
-          {/* Views + Downloads — always visible, compact */}
+          {/* Views + Downloads + Comments — always visible, compact */}
           <div className={`flex items-center gap-3 shrink-0 border-l pl-3 md:pl-4 ${darkMode ? 'border-slate-700/50' : 'border-slate-300/60'}`}>
             <div className="flex items-center gap-1"><Eye size={14} className="text-blue-400" /><span className={`text-xs font-bold tabular-nums ${textPrimary}`}>{localViews}</span></div>
             <div className="flex items-center gap-1"><Download size={14} className="text-green-500" /><span className={`text-xs font-bold tabular-nums ${textPrimary}`}>{localDownloads}</span></div>
+            <button
+              onClick={scrollToComments}
+              title="View comments"
+              className={`flex items-center gap-1 transition-colors ${darkMode ? 'text-slate-400 hover:text-green-400' : 'text-slate-500 hover:text-green-600'}`}
+            >
+              <MessageSquare size={14} /><span className={`text-xs font-bold tabular-nums ${textPrimary}`}>{localCommentsCount}</span>
+            </button>
           </div>
 
           {/* Metadata chips — hidden below md, inline above */}
           <div className={`hidden md:flex items-center gap-3 lg:gap-5 shrink-0 border-l pl-4 lg:pl-6 ${darkMode ? 'border-slate-700/50' : 'border-slate-300/60'}`}>
             <div className="flex items-center gap-1.5"><MusicIcon size={13} className="text-slate-500 shrink-0" /><span className={`text-[11px] font-semibold whitespace-nowrap ${textPrimary}`}>{sheet.type}</span></div>
             <div className="flex items-center gap-1.5"><FileText size={13} className="text-slate-500 shrink-0" /><span className={`text-[11px] font-semibold whitespace-nowrap ${textPrimary}`}>{sheet.fileSize}</span></div>
-            <div className="hidden xl:flex items-center gap-1.5"><Calendar size={13} className="text-slate-500 shrink-0" /><span className={`text-[11px] font-semibold whitespace-nowrap ${textPrimary}`}>{sheet.uploadedAt}</span></div>
-            <div className="hidden xl:flex items-center gap-1.5"><User size={13} className="text-slate-500 shrink-0" />
+            <div className="flex items-center gap-1.5 min-w-0"><Calendar size={13} className="text-slate-500 shrink-0" /><span className={`text-[11px] font-semibold max-w-[72px] truncate ${textPrimary}`}>{sheet.uploadedAt}</span></div>
+            <div className="flex items-center gap-1.5 min-w-0"><User size={13} className="text-slate-500 shrink-0" />
               {onViewProfile
-                ? <button onClick={() => onViewProfile(sheet.uploadedBy)} className={`text-[11px] font-semibold whitespace-nowrap hover:text-green-500 transition-colors ${textPrimary}`}>{sheet.uploadedBy.split('@')[0]}</button>
-                : <span className={`text-[11px] font-semibold whitespace-nowrap ${textPrimary}`}>{sheet.uploadedBy.split('@')[0]}</span>}
+                ? <button onClick={() => onViewProfile(sheet.uploadedBy)} className={`text-[11px] font-semibold max-w-[72px] truncate hover:text-green-500 transition-colors ${textPrimary}`} title={sheet.uploadedBy.split('@')[0]}>{sheet.uploadedBy.split('@')[0]}</button>
+                : <span className={`text-[11px] font-semibold max-w-[72px] truncate ${textPrimary}`}>{sheet.uploadedBy.split('@')[0]}</span>}
             </div>
           </div>
 
@@ -1051,14 +1244,17 @@ const FullPreviewPage: React.FC<FullPreviewPageProps> = ({
           )}
 
           {/* Comments */}
-          <CommentsSection
-            sheetId={sheet.id}
-            currentUserId={currentUserId}
-            currentUserEmail={currentUserEmail}
-            currentUserDisplayName={currentUserDisplayName}
-            isAdmin={false}
-            darkMode={darkMode}
-          />
+          <div ref={commentsSectionRef}>
+            <CommentsSection
+              sheetId={sheet.id}
+              currentUserId={currentUserId}
+              currentUserEmail={currentUserEmail}
+              currentUserDisplayName={currentUserDisplayName}
+              isAdmin={false}
+              darkMode={darkMode}
+              onCountChange={setLocalCommentsCount}
+            />
+          </div>
 
           <div className="mt-8 md:mt-12 mb-12 text-center max-w-2xl mx-auto space-y-4 no-print">
             <div className="w-12 h-1 bg-green-500 mx-auto rounded-full"></div>

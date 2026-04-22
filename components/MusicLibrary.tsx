@@ -1,4 +1,4 @@
-import { Search, List, Grid, Eye, Download, Music as MusicIcon, ArrowUp, ArrowDown, SearchX, Heart } from 'lucide-react';
+import { Search, List, Grid, Eye, Download, Music as MusicIcon, ArrowUp, ArrowDown, SearchX, Heart, MessageSquare } from 'lucide-react';
 import React, { useState, useEffect, useRef, useMemo, memo } from 'react';
 import { MusicSheet } from '../types';
 import { db } from '../supabase';
@@ -143,6 +143,9 @@ const SheetCard = memo(({ sheet, onPreview, activeMobileMenuId, setActiveMobileM
           <div className="flex items-center gap-3 shrink-0">
             <span className="flex items-center gap-1"><Eye size={12} /> {sheet.views}</span>
             <span className="flex items-center gap-1"><Download size={12} /> {sheet.downloads}</span>
+            {sheet.commentsCount > 0 && (
+              <span className="flex items-center gap-1"><MessageSquare size={12} /> {sheet.commentsCount}</span>
+            )}
           </div>
         </div>
       </div>
@@ -164,6 +167,7 @@ const mapSheet = (s: Record<string, unknown>): MusicSheet => ({
   fileSize: s.file_size as string,
   views: (s.views as number) ?? 0,
   downloads: (s.downloads as number) ?? 0,
+  commentsCount: (s.comments_count as number) ?? 0,
   isPublic: s.is_public as boolean,
   isAdminRestricted: (s.is_admin_restricted as boolean) ?? false,
   thumbnailUrl: s.thumbnail_url as string,
