@@ -1040,19 +1040,31 @@ const FullPreviewPage: React.FC<FullPreviewPageProps> = ({
     window.open(`${window.location.origin}${window.location.pathname}?sheet=${sheet?.id}`, '_blank');
   });
 
-  const handleDownload = () => handleProtectedAction(() => {
+  const handleDownload = () => handleProtectedAction(async () => {
     trackInteraction('downloads');
-    // Append ?download=true so Supabase Storage sets Content-Disposition: attachment,
-    // forcing a real OS Save dialog even for cross-origin URLs.
     const base = resolvedPdfUrl || sheet?.pdfUrl || '';
-    const url = base ? (base.includes('?') ? `${base}&download=true` : `${base}?download=true`) : '';
-    if (!url) return;
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${sheet?.title ?? 'sheet'}.pdf`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
+    if (!base) return;
+
+    const filename = `${sheet?.title ?? 'sheet'} - ${sheet?.composer ?? ''}.pdf`.replace(/[\\/:*?"<>|]/g, '_').trim();
+
+    try {
+      // Fetch as blob so we can set our own filename regardless of CORS/cross-origin rules.
+      // a.download is silently ignored for cross-origin URLs — blob URL is always same-origin.
+      const resp = await fetch(base);
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+      const blob = await resp.blob();
+      const blobUrl = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = blobUrl;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 60_000);
+    } catch {
+      // Fallback: open in new tab — browser will use server filename
+      window.open(base, '_blank');
+    }
   });
 
   const handleShare = async () => {

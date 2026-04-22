@@ -126,7 +126,19 @@ const SheetCard = memo(({ sheet, onPreview, activeMobileMenuId, setActiveMobileM
             Open Sheet
           </button>
           <button
-            onClick={(e) => { e.stopPropagation(); const a = document.createElement('a'); a.href = sheet.pdfUrl; a.download = `${sheet.title}.pdf`; a.click(); }}
+            onClick={async (e) => {
+              e.stopPropagation();
+              const filename = `${sheet.title} - ${sheet.composer}.pdf`.replace(/[\\/:*?"<>|]/g, '_').trim();
+              try {
+                const resp = await fetch(sheet.pdfUrl);
+                if (!resp.ok) throw new Error();
+                const blob = await resp.blob();
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a'); a.href = url; a.download = filename;
+                document.body.appendChild(a); a.click(); document.body.removeChild(a);
+                setTimeout(() => URL.revokeObjectURL(url), 60_000);
+              } catch { window.open(sheet.pdfUrl, '_blank'); }
+            }}
             aria-label={`Download ${sheet.title}`}
             className="w-full py-2.5 bg-green-500 hover:bg-green-600 text-slate-950 text-sm font-bold rounded-xl shadow-lg active:scale-95 transition-all flex items-center justify-center gap-2"
           >
