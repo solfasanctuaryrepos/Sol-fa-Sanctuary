@@ -1055,9 +1055,24 @@ const FullPreviewPage: React.FC<FullPreviewPageProps> = ({
     document.body.removeChild(a);
   });
 
-  const handleShare = () => {
+  const handleShare = async () => {
     const url = window.location.href;
-    const done = () => { setCopiedToast(true); setTimeout(() => setCopiedToast(false), 2000); };
+    const title = sheet?.title ?? 'Sol-fa Sanctuary';
+    const text = `"${title}" by ${sheet?.composer ?? ''} — Sol-fa Sanctuary`;
+    const done = () => { setCopiedToast(true); setTimeout(() => setCopiedToast(false), 2500); };
+
+    // Web Share API — shows native share sheet (WhatsApp, Facebook, copy link, etc.)
+    if (navigator.share) {
+      try {
+        await navigator.share({ title, text, url });
+        return; // native share handled everything
+      } catch (e) {
+        if ((e as Error).name === 'AbortError') return; // user dismissed — do nothing
+        // Other error: fall through to clipboard
+      }
+    }
+
+    // Clipboard fallback
     if (navigator.clipboard && window.isSecureContext) {
       navigator.clipboard.writeText(url).then(done).catch(() => fallbackCopy(url, done));
     } else {
