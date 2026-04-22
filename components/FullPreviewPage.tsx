@@ -806,6 +806,24 @@ const RelatedSheets: React.FC<RelatedSheetsProps> = ({ sheet, sheets, darkMode, 
   );
 };
 
+// Clipboard fallback for non-secure (HTTP) contexts
+function fallbackCopy(text: string, onDone?: () => void) {
+  try {
+    const el = document.createElement('textarea');
+    el.value = text;
+    el.setAttribute('readonly', '');
+    el.style.cssText = 'position:absolute;left:-9999px';
+    document.body.appendChild(el);
+    el.select();
+    document.execCommand('copy');
+    document.body.removeChild(el);
+    onDone?.();
+  } catch {
+    // Last resort: open prompt so user can copy manually
+    window.prompt('Copy this link:', text);
+  }
+}
+
 // ─── Main FullPreviewPage ─────────────────────────────────────────────────────
 const FullPreviewPage: React.FC<FullPreviewPageProps> = ({
   sheet,
@@ -1038,10 +1056,13 @@ const FullPreviewPage: React.FC<FullPreviewPageProps> = ({
   });
 
   const handleShare = () => {
-    navigator.clipboard.writeText(window.location.href).then(() => {
-      setCopiedToast(true);
-      setTimeout(() => setCopiedToast(false), 2000);
-    }).catch(() => {});
+    const url = window.location.href;
+    const done = () => { setCopiedToast(true); setTimeout(() => setCopiedToast(false), 2000); };
+    if (navigator.clipboard && window.isSecureContext) {
+      navigator.clipboard.writeText(url).then(done).catch(() => fallbackCopy(url, done));
+    } else {
+      fallbackCopy(url, done);
+    }
   };
 
   const handleAddToCollection = () => {
