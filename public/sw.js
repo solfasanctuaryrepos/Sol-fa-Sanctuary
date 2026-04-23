@@ -40,8 +40,12 @@ self.addEventListener('fetch', event => {
   // Never intercept non-GET
   if (request.method !== 'GET') return;
 
-  // Never intercept Supabase API calls
-  if (url.hostname.includes('supabase.co')) return;
+  // Never intercept Supabase API calls (cloud or self-hosted)
+  if (
+    url.hostname.includes('supabase.co') ||
+    url.hostname.includes('supabasekong') ||
+    url.hostname === '76.13.138.43'
+  ) return;
 
   // Navigation requests: serve index.html from cache for SPA offline support
   if (request.mode === 'navigate') {
@@ -77,7 +81,8 @@ self.addEventListener('fetch', event => {
     fetch(request)
       .then(response => {
         if (response.ok) {
-          caches.open(CDN_CACHE).then(cache => cache.put(request, response.clone()));
+          const clone = response.clone();
+          caches.open(CDN_CACHE).then(cache => cache.put(request, clone));
         }
         return response;
       })
