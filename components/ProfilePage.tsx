@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Eye, Download, Music, Calendar, ChevronLeft } from 'lucide-react';
+import { Eye, Download, Music, Calendar, ChevronLeft, Heart, MessageSquare } from 'lucide-react';
 import { MusicSheet } from '../types';
 import { db } from '../supabase';
 
@@ -155,7 +155,11 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ email, sheets, currentUserEma
                   <h3 className={`font-bold text-sm truncate mb-1 ${textPrimary}`}>{sheet.title}</h3>
                   <div className={`flex items-center justify-between text-xs ${textSecondary}`}>
                     <span className="truncate">{sheet.composer}</span>
-                    <span className="flex items-center gap-1 shrink-0"><Eye size={11} /> {sheet.views}</span>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <span className="flex items-center gap-1"><Eye size={11} /> {sheet.views}</span>
+                      <span className="flex items-center gap-1"><Heart size={11} /> {sheet.likesCount}</span>
+                      <span className="flex items-center gap-1"><MessageSquare size={11} /> {sheet.commentsCount}</span>
+                    </div>
                   </div>
                 </div>
               </div>

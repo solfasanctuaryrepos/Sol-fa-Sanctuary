@@ -1,5 +1,5 @@
 
-import { Search, Trash2, ChevronDown, Music, List, Grid, X, ArrowUp, ArrowDown, Lock, Unlock, Globe, Eye, Download, Check, Settings2, Calendar, Users, Shield, User as UserIcon, AlertTriangle, MoreVertical, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Search, Trash2, ChevronDown, Music, List, Grid, X, ArrowUp, ArrowDown, Lock, Unlock, Globe, Eye, Download, Check, Settings2, Calendar, Users, Shield, User as UserIcon, AlertTriangle, MoreVertical, ChevronLeft, ChevronRight, Heart, MessageSquare } from 'lucide-react';
 import React, { useState, useRef, useEffect, useCallback, memo } from 'react';
 import { AdminTab, MusicSheet, User } from '../types';
 import { db } from '../supabase';
@@ -478,6 +478,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onPreview, darkMode, sh
                         <div className="flex items-center gap-3 shrink-0">
                           <span className="flex items-center gap-1"><Eye size={12} /> {sheet.views}</span>
                           <span className="flex items-center gap-1"><Download size={12} /> {sheet.downloads}</span>
+                          <span className="flex items-center gap-1"><Heart size={12} /> {sheet.likesCount}</span>
+                          <span className="flex items-center gap-1"><MessageSquare size={12} /> {sheet.commentsCount}</span>
                         </div>
                       </div>
                     </div>
@@ -525,6 +527,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onPreview, darkMode, sh
                           <div className="flex justify-center items-center">Downloads <SortIcon colKey="downloads" type="sheet" /></div>
                         </th>
                       )}
+                      <th className="hidden md:table-cell px-6 py-4 text-center"><div className="flex justify-center"><Heart size={12} /></div></th>
+                      <th className="hidden md:table-cell px-6 py-4 text-center"><div className="flex justify-center"><MessageSquare size={12} /></div></th>
                       <th className="px-4 md:px-6 py-4 text-right">Actions</th>
                     </tr>
                   </thead>
@@ -569,6 +573,8 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onPreview, darkMode, sh
                         )}
                         {visibleSheetColumns.views && <td className="hidden md:table-cell px-6 py-4 text-sm text-slate-500 text-center">{sheet.views}</td>}
                         {visibleSheetColumns.downloads && <td className="hidden md:table-cell px-6 py-4 text-sm text-slate-500 text-center">{sheet.downloads}</td>}
+                        <td className="hidden md:table-cell px-6 py-4 text-sm text-slate-500 text-center">{sheet.likesCount}</td>
+                        <td className="hidden md:table-cell px-6 py-4 text-sm text-slate-500 text-center">{sheet.commentsCount}</td>
                         <td className="px-4 md:px-6 py-4 text-right">
                           {/* Added text-white on mobile to admin content list actions as requested */}
                           <div className="flex items-center justify-end gap-1 max-md:text-white">

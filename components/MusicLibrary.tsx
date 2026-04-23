@@ -155,6 +155,7 @@ const SheetCard = memo(({ sheet, onPreview, activeMobileMenuId, setActiveMobileM
           <div className="flex items-center gap-3 shrink-0">
             <span className="flex items-center gap-1"><Eye size={12} /> {sheet.views}</span>
             <span className="flex items-center gap-1"><Download size={12} /> {sheet.downloads}</span>
+            <span className="flex items-center gap-1"><Heart size={12} /> {sheet.likesCount}</span>
             <span className="flex items-center gap-1"><MessageSquare size={12} /> {sheet.commentsCount}</span>
           </div>
         </div>
@@ -178,6 +179,7 @@ const mapSheet = (s: Record<string, unknown>): MusicSheet => ({
   views: (s.views as number) ?? 0,
   downloads: (s.downloads as number) ?? 0,
   commentsCount: (s.comments_count as number) ?? 0,
+  likesCount: (s.likes_count as number) ?? 0,
   isPublic: s.is_public as boolean,
   isAdminRestricted: (s.is_admin_restricted as boolean) ?? false,
   thumbnailUrl: s.thumbnail_url as string,
@@ -437,13 +439,14 @@ const MusicLibrary: React.FC<MusicLibraryProps> = ({ darkMode, initialSearch = '
                   {visibleColumns.type && <th className="hidden lg:table-cell px-6 py-4 cursor-pointer hover:text-green-500 transition-colors" onClick={() => handleSort('type')}><div className="flex items-center">Type <SortIcon colKey="type" /></div></th>}
                   {visibleColumns.uploadedAt && <th className="hidden xl:table-cell px-6 py-4 cursor-pointer hover:text-green-500 transition-colors" onClick={() => handleSort('uploadedAt')}><div className="flex items-center">Uploaded <SortIcon colKey="uploadedAt" /></div></th>}
                   {visibleColumns.views && <th className="px-4 md:px-6 py-4 text-center cursor-pointer hover:text-green-500 transition-colors" onClick={() => handleSort('views')}><div className="flex justify-center items-center">Views <SortIcon colKey="views" /></div></th>}
+                  <th className="hidden sm:table-cell px-4 md:px-6 py-4 text-center"><div className="flex justify-center items-center"><Heart size={12} /></div></th>
                   <th className="hidden sm:table-cell px-4 md:px-6 py-4 text-center"><div className="flex justify-center items-center"><MessageSquare size={12} /></div></th>
                 </tr>
               </thead>
               <tbody className={`divide-y ${darkMode ? 'divide-slate-800' : 'divide-slate-100'}`}>
                 {filteredSheets.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="px-6 py-20">
+                    <td colSpan={7} className="px-6 py-20">
                       <div className="flex flex-col items-center gap-4 text-slate-500">
                         <SearchX size={40} className="opacity-30" />
                         <p>No sheets match your search.</p>
@@ -482,6 +485,7 @@ const MusicLibrary: React.FC<MusicLibraryProps> = ({ darkMode, initialSearch = '
                     {visibleColumns.type && (<td className="hidden lg:table-cell px-6 py-4"><span className={`px-2.5 py-1 text-[10px] font-bold uppercase rounded-full border ${darkMode ? 'bg-slate-800 text-slate-300 border-slate-700' : 'bg-slate-100 text-slate-500 border-slate-200'}`}>{sheet.type}</span></td>)}
                     {visibleColumns.uploadedAt && <td className="hidden xl:table-cell px-6 py-4 text-sm text-slate-500">{sheet.uploadedAt}</td>}
                     {visibleColumns.views && <td className="px-4 md:px-6 py-4 text-sm text-slate-500 text-center">{sheet.views}</td>}
+                    <td className="hidden sm:table-cell px-4 md:px-6 py-4 text-sm text-slate-500 text-center">{sheet.likesCount}</td>
                     <td className="hidden sm:table-cell px-4 md:px-6 py-4 text-sm text-slate-500 text-center">{sheet.commentsCount}</td>
                   </tr>
                 ))}

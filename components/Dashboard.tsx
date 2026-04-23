@@ -1,6 +1,6 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { Upload, Music, Eye, Download, Search, List, Grid, MoreVertical, Edit2, Trash2, FileText, ArrowUp, ArrowDown, X, Check, Lock, ShieldAlert, Globe, AlertTriangle, Heart, BarChart2, RefreshCw, BookOpen } from 'lucide-react';
+import { Upload, Music, Eye, Download, Search, List, Grid, MoreVertical, Edit2, Trash2, FileText, ArrowUp, ArrowDown, X, Check, Lock, ShieldAlert, Globe, AlertTriangle, Heart, BarChart2, RefreshCw, BookOpen, MessageSquare } from 'lucide-react';
 import { MusicSheet } from '../types';
 import { db, storage } from '../supabase';
 import Modal from './Modal';
@@ -401,6 +401,8 @@ const Dashboard: React.FC<DashboardProps> = ({ onUploadClick, onPreview, darkMod
                       <div className="flex items-center gap-3">
                         <span className="flex items-center gap-1"><Eye size={12} /> {sheet.views}</span>
                         <span className="flex items-center gap-1"><Download size={12} /> {sheet.downloads}</span>
+                        <span className="flex items-center gap-1"><Heart size={12} /> {sheet.likesCount}</span>
+                        <span className="flex items-center gap-1"><MessageSquare size={12} /> {sheet.commentsCount}</span>
                       </div>
                     </div>
                   </div>
@@ -535,6 +537,8 @@ const Dashboard: React.FC<DashboardProps> = ({ onUploadClick, onPreview, darkMod
                     <div className="flex items-center gap-2 shrink-0">
                       <span className="flex items-center gap-1"><Eye size={12} /> {sheet.views}</span>
                       <span className="flex items-center gap-1"><Download size={12} /> {sheet.downloads}</span>
+                      <span className="flex items-center gap-1"><Heart size={12} /> {sheet.likesCount}</span>
+                      <span className="flex items-center gap-1"><MessageSquare size={12} /> {sheet.commentsCount}</span>
                       <button
                         onClick={(e) => { e.stopPropagation(); setSelectedSheetForAnalytics(selectedSheetForAnalytics?.id === sheet.id ? null : sheet); }}
                         aria-label="View analytics"
@@ -583,6 +587,8 @@ const Dashboard: React.FC<DashboardProps> = ({ onUploadClick, onPreview, darkMod
                     <th className="hidden md:table-cell px-6 py-4 text-center cursor-pointer hover:text-green-500 transition-colors" onClick={() => handleSort('downloads')}>
                       <div className="flex justify-center items-center">Downloads <SortIcon colKey="downloads" /></div>
                     </th>
+                    <th className="hidden md:table-cell px-6 py-4 text-center"><div className="flex justify-center"><Heart size={12} /></div></th>
+                    <th className="hidden md:table-cell px-6 py-4 text-center"><div className="flex justify-center"><MessageSquare size={12} /></div></th>
                     <th className="px-4 md:px-6 py-4 text-right">Actions</th>
                   </tr>
                 </thead>
@@ -623,6 +629,8 @@ const Dashboard: React.FC<DashboardProps> = ({ onUploadClick, onPreview, darkMod
                       <td className="hidden md:table-cell px-6 py-4 text-sm text-slate-500">{sheet.fileSize}</td>
                       <td className="hidden md:table-cell px-6 py-4 text-sm text-slate-500 text-center">{sheet.views}</td>
                       <td className="hidden md:table-cell px-6 py-4 text-sm text-slate-500 text-center">{sheet.downloads}</td>
+                      <td className="hidden md:table-cell px-6 py-4 text-sm text-slate-500 text-center">{sheet.likesCount}</td>
+                      <td className="hidden md:table-cell px-6 py-4 text-sm text-slate-500 text-center">{sheet.commentsCount}</td>
                       <td className="px-4 md:px-6 py-4 text-right">
                         {/* Added text-white on mobile to dashboard list actions as requested */}
                         <div className="flex items-center justify-end gap-1 max-md:text-white">

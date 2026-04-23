@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { BookOpen, Plus, X, Globe, Lock, Trash2, Copy, Check, ChevronLeft, AlertTriangle, Loader2, FolderOpen } from 'lucide-react';
+import { BookOpen, Plus, X, Globe, Lock, Trash2, Copy, Check, ChevronLeft, AlertTriangle, Loader2, FolderOpen, Eye, Heart, MessageSquare } from 'lucide-react';
 import { Collection, MusicSheet } from '../types';
 import { db } from '../supabase';
 
@@ -240,6 +240,11 @@ const CollectionsPage: React.FC<CollectionsPageProps> = ({
                 <div className="p-3">
                   <p className={`text-xs font-bold truncate ${textPrimary}`}>{s.title}</p>
                   <p className={`text-[10px] truncate mt-0.5 ${textSecondary}`}>{s.composer}</p>
+                  <div className={`flex items-center gap-2 text-[10px] mt-1 ${textSecondary}`}>
+                    <span className="flex items-center gap-0.5"><Eye size={9} /> {s.views}</span>
+                    <span className="flex items-center gap-0.5"><Heart size={9} /> {s.likesCount}</span>
+                    <span className="flex items-center gap-0.5"><MessageSquare size={9} /> {s.commentsCount}</span>
+                  </div>
                   <button
                     onClick={() => handleRemoveSheet(s.id)}
                     disabled={removingSheetId === s.id}

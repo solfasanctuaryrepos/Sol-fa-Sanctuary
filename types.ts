@@ -37,6 +37,7 @@ export interface MusicSheet {
   views: number;
   downloads: number;
   commentsCount: number;
+  likesCount: number;
   isPublic: boolean;
   isAdminRestricted: boolean;
   thumbnailUrl: string;

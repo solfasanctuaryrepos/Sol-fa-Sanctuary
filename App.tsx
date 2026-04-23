@@ -40,6 +40,7 @@ interface RawSheetRow {
   pdf_url: string;
   uploaded_by: string;
   comments_count?: number;
+  likes_count?: number;
 }
 
 const App: React.FC = () => {
@@ -90,6 +91,7 @@ const App: React.FC = () => {
               pdfUrl: data.pdf_url,
               uploadedBy: data.uploaded_by,
               commentsCount: data.comments_count ?? 0,
+    likesCount: data.likes_count ?? 0,
             };
             setActivePreview(mappedSheet);
           }
@@ -128,6 +130,7 @@ const App: React.FC = () => {
     pdfUrl: s.pdf_url,
     uploadedBy: s.uploaded_by,
     commentsCount: s.comments_count ?? 0,
+    likesCount: s.likes_count ?? 0,
   });
 
   // Builds the correct query for the current view + user combination.

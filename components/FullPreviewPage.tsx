@@ -853,6 +853,7 @@ const FullPreviewPage: React.FC<FullPreviewPageProps> = ({
   const [copiedToast, setCopiedToast] = useState(false);
   const [localViews, setLocalViews] = useState(sheet?.views ?? 0);
   const [localDownloads, setLocalDownloads] = useState(sheet?.downloads ?? 0);
+  const [localLikesCount, setLocalLikesCount] = useState(sheet?.likesCount ?? 0);
   const [isFavorited, setIsFavorited] = useState(false);
   const [favLoading, setFavLoading] = useState(false);
   const [showCollectionDropdown, setShowCollectionDropdown] = useState(false);
@@ -867,6 +868,7 @@ const FullPreviewPage: React.FC<FullPreviewPageProps> = ({
   useEffect(() => {
     setLocalViews(sheet?.views ?? 0);
     setLocalDownloads(sheet?.downloads ?? 0);
+    setLocalLikesCount(sheet?.likesCount ?? 0);
   }, [sheet?.id]);
 
   useEffect(() => {
@@ -1014,6 +1016,7 @@ const FullPreviewPage: React.FC<FullPreviewPageProps> = ({
     setFavLoading(true);
     const wasF = isFavorited;
     setIsFavorited(!wasF);
+    setLocalLikesCount(n => wasF ? Math.max(0, n - 1) : n + 1);
     const newFavs = wasF
       ? userFavorites.filter(id => id !== sheet.id)
       : [...userFavorites, sheet.id];
@@ -1026,6 +1029,7 @@ const FullPreviewPage: React.FC<FullPreviewPageProps> = ({
       }
     } catch {
       setIsFavorited(wasF);
+      setLocalLikesCount(n => wasF ? n + 1 : Math.max(0, n - 1));
       onFavoritesChange?.(userFavorites);
     } finally {
       setFavLoading(false);
@@ -1165,9 +1169,10 @@ const FullPreviewPage: React.FC<FullPreviewPageProps> = ({
             <button onClick={toggleFavorite}
               aria-label={isFavorited ? 'Remove from favourites' : 'Add to favourites'}
               disabled={favLoading}
-              className={`p-2 rounded-xl border transition-colors ${isFavorited ? 'border-rose-500/50 text-rose-500 bg-rose-500/10' : darkMode ? 'border-slate-800 text-slate-400 hover:text-rose-400 hover:bg-slate-900' : 'border-slate-200 text-slate-500 hover:text-rose-500 hover:bg-slate-50 shadow-sm'}`}
+              className={`flex items-center gap-1.5 px-2.5 py-2 rounded-xl border transition-colors ${isFavorited ? 'border-rose-500/50 text-rose-500 bg-rose-500/10' : darkMode ? 'border-slate-800 text-slate-400 hover:text-rose-400 hover:bg-slate-900' : 'border-slate-200 text-slate-500 hover:text-rose-500 hover:bg-slate-50 shadow-sm'}`}
               title={isFavorited ? 'Remove favourite' : 'Add to favourites'}>
               <Heart size={17} className={isFavorited ? 'fill-current' : ''} />
+              <span className="text-xs font-semibold">{localLikesCount}</span>
             </button>
             <div className="relative shrink-0" ref={collectionDropRef}>
               <button onClick={handleAddToCollection} aria-label="Add to collection"
@@ -1221,8 +1226,10 @@ const FullPreviewPage: React.FC<FullPreviewPageProps> = ({
                 className={`p-2.5 rounded-xl border flex-1 flex justify-center transition-colors ${darkMode ? 'border-slate-800 text-slate-400 hover:text-white' : 'border-slate-200 text-slate-500 hover:text-slate-900'}`}>
                 <Share2 size={18} /></button>
               <button onClick={toggleFavorite} disabled={favLoading}
-                className={`p-2.5 rounded-xl border flex-1 flex justify-center transition-colors ${isFavorited ? 'border-rose-500/50 text-rose-500 bg-rose-500/10' : darkMode ? 'border-slate-800 text-slate-400 hover:text-rose-400' : 'border-slate-200 text-slate-500 hover:text-rose-500'}`}>
-                <Heart size={18} className={isFavorited ? 'fill-current' : ''} /></button>
+                className={`px-2 py-2.5 rounded-xl border flex-1 flex items-center justify-center gap-1.5 transition-colors ${isFavorited ? 'border-rose-500/50 text-rose-500 bg-rose-500/10' : darkMode ? 'border-slate-800 text-slate-400 hover:text-rose-400' : 'border-slate-200 text-slate-500 hover:text-rose-500'}`}>
+                <Heart size={18} className={isFavorited ? 'fill-current' : ''} />
+                <span className="text-xs font-semibold">{localLikesCount}</span>
+              </button>
               <div className="relative flex-1" ref={collectionDropRef}>
                 <button onClick={handleAddToCollection}
                   className={`w-full p-2.5 rounded-xl border flex justify-center transition-colors ${showCollectionDropdown ? (darkMode ? 'border-green-500/50 text-green-500 bg-green-500/10' : 'border-green-500/50 text-green-600 bg-green-500/10') : darkMode ? 'border-slate-800 text-slate-400 hover:text-white' : 'border-slate-200 text-slate-500 hover:text-slate-900'}`}>
