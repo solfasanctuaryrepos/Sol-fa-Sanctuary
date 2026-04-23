@@ -46,6 +46,7 @@ const App: React.FC = () => {
   const { darkMode, toggleTheme } = useTheme();
   const [currentView, setCurrentView] = useState<View>('home');
   const [previousView, setPreviousView] = useState<View>('home');
+  const [previousPreview, setPreviousPreview] = useState<MusicSheet | null>(null);
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -267,6 +268,7 @@ const App: React.FC = () => {
   const handleViewProfile = (email: string) => {
     setProfileEmail(email);
     setPreviousView(currentView);
+    setPreviousPreview(activePreview);
     setCurrentView('profile');
     setActivePreview(null);
   };
@@ -342,7 +344,7 @@ const App: React.FC = () => {
             onSheetUpdated={(sheet) => setSheets(prev => prev.map(s => s.id === sheet.id ? sheet : s))}
             userFavorites={userFavorites}
             onFavoritesChange={setUserFavorites}
-            onNavigateCollections={() => { setPreviousView(currentView); setCurrentView('collections'); }}
+            onNavigateCollections={() => { setPreviousView(currentView); setPreviousPreview(null); setCurrentView('collections'); }}
           />
         ) : null;
       case 'library':
@@ -381,7 +383,7 @@ const App: React.FC = () => {
             currentUserId={currentUser.id}
             currentUserEmail={currentUser.email}
             onPreview={handlePreview}
-            onBack={() => setCurrentView(previousView)}
+            onBack={() => { setCurrentView(previousView); setActivePreview(previousPreview); }}
           />
         ) : null;
       case 'profile':
@@ -392,7 +394,7 @@ const App: React.FC = () => {
             currentUserEmail={currentUser?.email}
             darkMode={darkMode}
             onPreview={handlePreview}
-            onBack={() => setCurrentView(previousView)}
+            onBack={() => { setCurrentView(previousView); setActivePreview(previousPreview); }}
           />
         );
       default:
@@ -436,7 +438,7 @@ const App: React.FC = () => {
           onViewProfile={handleViewProfile}
           sheets={sheets}
           onPreview={handlePreview}
-          onNavigateCollections={() => { setPreviousView(currentView); setCurrentView('collections'); setActivePreview(null); }}
+          onNavigateCollections={() => { setPreviousView(currentView); setPreviousPreview(activePreview); setCurrentView('collections'); setActivePreview(null); }}
         />
       ) : (
         <>
