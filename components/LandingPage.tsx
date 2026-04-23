@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { Upload, Search, Shield, Share2, ArrowRight, Eye, Download, LogIn, Music, Heart } from 'lucide-react';
+import { Upload, Search, Shield, Share2, ArrowRight, Eye, Download, LogIn, Music, Heart, MessageSquare } from 'lucide-react';
 import { MusicSheet } from '../types';
 import { db } from '../supabase';
 
@@ -175,6 +175,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onUploadClick, onBrowseClick,
                   <span className="truncate max-w-[100px]">{sheet.composer}</span>
                   <div className="flex items-center gap-3">
                     <span className="flex items-center gap-1"><Eye size={12} /> {sheet.views}</span>
+                    <span className="flex items-center gap-1"><MessageSquare size={12} /> {sheet.commentsCount}</span>
                   </div>
                 </div>
               </div>
