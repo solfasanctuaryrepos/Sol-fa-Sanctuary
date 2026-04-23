@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Eye, Download, Music, Calendar, User } from 'lucide-react';
+import { Eye, Download, Music, Calendar, ChevronLeft } from 'lucide-react';
 import { MusicSheet } from '../types';
 import { db } from '../supabase';
 
@@ -9,9 +9,10 @@ interface ProfilePageProps {
   currentUserEmail?: string;
   darkMode: boolean;
   onPreview: (sheet: MusicSheet) => void;
+  onBack?: () => void;
 }
 
-const ProfilePage: React.FC<ProfilePageProps> = ({ email, sheets, currentUserEmail, darkMode, onPreview }) => {
+const ProfilePage: React.FC<ProfilePageProps> = ({ email, sheets, currentUserEmail, darkMode, onPreview, onBack }) => {
   const [displayName, setDisplayName] = useState<string>('');
   const [memberSince, setMemberSince] = useState<string>('');
   const [loading, setLoading] = useState(true);
@@ -69,6 +70,17 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ email, sheets, currentUserEma
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500 max-w-4xl mx-auto">
+      {/* Back button */}
+      {onBack && (
+        <button
+          onClick={onBack}
+          className={`flex items-center gap-1.5 text-sm font-medium transition-colors ${darkMode ? 'text-slate-400 hover:text-slate-100' : 'text-slate-500 hover:text-slate-900'}`}
+        >
+          <ChevronLeft size={18} />
+          Back
+        </button>
+      )}
+
       {/* Profile header */}
       <div className={`p-8 rounded-2xl border ${cardBg}`}>
         <div className="flex flex-col sm:flex-row items-center sm:items-start gap-6">

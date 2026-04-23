@@ -8,6 +8,7 @@ interface CollectionsPageProps {
   currentUserId: string;
   currentUserEmail: string;
   onPreview: (sheet: MusicSheet) => void;
+  onBack?: () => void;
 }
 
 const CollectionsPage: React.FC<CollectionsPageProps> = ({
@@ -15,6 +16,7 @@ const CollectionsPage: React.FC<CollectionsPageProps> = ({
   currentUserId,
   currentUserEmail,
   onPreview,
+  onBack,
 }) => {
   const [collections, setCollections] = useState<Collection[]>([]);
   const [loading, setLoading] = useState(true);
@@ -275,6 +277,15 @@ const CollectionsPage: React.FC<CollectionsPageProps> = ({
   // List view
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
+      {onBack && (
+        <button
+          onClick={onBack}
+          className={`flex items-center gap-1.5 text-sm font-medium transition-colors ${darkMode ? 'text-slate-400 hover:text-slate-100' : 'text-slate-500 hover:text-slate-900'}`}
+        >
+          <ChevronLeft size={18} />
+          Back
+        </button>
+      )}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className={`text-3xl font-serif font-bold ${textPrimary}`}>My Collections</h1>

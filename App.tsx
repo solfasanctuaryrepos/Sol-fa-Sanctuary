@@ -45,6 +45,7 @@ interface RawSheetRow {
 const App: React.FC = () => {
   const { darkMode, toggleTheme } = useTheme();
   const [currentView, setCurrentView] = useState<View>('home');
+  const [previousView, setPreviousView] = useState<View>('home');
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -265,6 +266,7 @@ const App: React.FC = () => {
 
   const handleViewProfile = (email: string) => {
     setProfileEmail(email);
+    setPreviousView(currentView);
     setCurrentView('profile');
     setActivePreview(null);
   };
@@ -340,7 +342,7 @@ const App: React.FC = () => {
             onSheetUpdated={(sheet) => setSheets(prev => prev.map(s => s.id === sheet.id ? sheet : s))}
             userFavorites={userFavorites}
             onFavoritesChange={setUserFavorites}
-            onNavigateCollections={() => setCurrentView('collections')}
+            onNavigateCollections={() => { setPreviousView(currentView); setCurrentView('collections'); }}
           />
         ) : null;
       case 'library':
@@ -379,6 +381,7 @@ const App: React.FC = () => {
             currentUserId={currentUser.id}
             currentUserEmail={currentUser.email}
             onPreview={handlePreview}
+            onBack={() => setCurrentView(previousView)}
           />
         ) : null;
       case 'profile':
@@ -389,6 +392,7 @@ const App: React.FC = () => {
             currentUserEmail={currentUser?.email}
             darkMode={darkMode}
             onPreview={handlePreview}
+            onBack={() => setCurrentView(previousView)}
           />
         );
       default:
@@ -432,7 +436,7 @@ const App: React.FC = () => {
           onViewProfile={handleViewProfile}
           sheets={sheets}
           onPreview={handlePreview}
-          onNavigateCollections={() => { setCurrentView('collections'); setActivePreview(null); }}
+          onNavigateCollections={() => { setPreviousView(currentView); setCurrentView('collections'); setActivePreview(null); }}
         />
       ) : (
         <>
