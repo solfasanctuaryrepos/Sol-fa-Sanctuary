@@ -1,8 +1,8 @@
-// Sol-fa Sanctuary Service Worker v6.1
+// Sol-fa Sanctuary Service Worker v6.2
 // Strategy: App shell caching + SPA offline support + CDN fallback
 
-const APP_SHELL_CACHE = 'solfa-app-shell-v6';
-const CDN_CACHE = 'solfa-cdn-v6';
+const APP_SHELL_CACHE = 'solfa-app-shell-v6.2';
+const CDN_CACHE = 'solfa-cdn-v6.2';
 
 // A guaranteed fallback Response so we never return undefined to the browser
 const offlineResponse = () => new Response('Offline — please check your connection.', {
@@ -40,11 +40,12 @@ self.addEventListener('fetch', event => {
   // Never intercept non-GET
   if (request.method !== 'GET') return;
 
-  // Never intercept Supabase API calls (cloud or self-hosted)
+  // Never intercept Supabase API calls (cloud, self-hosted, or custom domain)
   if (
     url.hostname.includes('supabase.co') ||
     url.hostname.includes('supabasekong') ||
-    url.hostname === '76.13.138.43'
+    url.hostname === '76.13.138.43' ||
+    url.hostname === 'api.solfasanctuary.com'
   ) return;
 
   // Navigation requests: serve index.html from cache for SPA offline support
