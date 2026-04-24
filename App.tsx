@@ -50,6 +50,7 @@ const App: React.FC = () => {
   const [previousPreview, setPreviousPreview] = useState<MusicSheet | null>(null);
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const [isRecoveryMode, setIsRecoveryMode] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [activePreview, setActivePreview] = useState<MusicSheet | null>(null);
   const [sheets, setSheets] = useState<MusicSheet[]>([]);
@@ -241,11 +242,19 @@ const App: React.FC = () => {
     const { data: { subscription } } = auth.onAuthStateChange((event, session) => {
       if (!authReadyRef.current) return; // ignore events before initial session resolves
       if (event === 'SIGNED_IN') {
+        setIsRecoveryMode(false);
         setIsAuthModalOpen(false);
         resolveUser(session?.user ?? null);
+      } else if (event === 'PASSWORD_RECOVERY') {
+        // User arrived via password-reset link — open modal in set-new-password mode
+        setIsRecoveryMode(true);
+        setIsAuthModalOpen(true);
       } else if (event === 'SIGNED_OUT') {
         setCurrentUser(null);
+        setIsRecoveryMode(false);
       } else if (event === 'TOKEN_REFRESHED') {
+        resolveUser(session?.user ?? null);
+      } else if (event === 'USER_UPDATED') {
         resolveUser(session?.user ?? null);
       }
     });
@@ -520,8 +529,9 @@ const App: React.FC = () => {
 
       <AuthModal
         isOpen={isAuthModalOpen}
-        onClose={() => setIsAuthModalOpen(false)}
+        onClose={() => { setIsAuthModalOpen(false); setIsRecoveryMode(false); }}
         darkMode={darkMode}
+        recoveryMode={isRecoveryMode}
       />
 
       {showOnboarding && (
