@@ -216,9 +216,15 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onPreview, darkMode, sh
     }
 
     try {
-      const tableName = type === 'sheet' ? 'sheets' : 'profiles';
-      const { error } = await db.from(tableName).delete().eq('id', id);
-      if (error) throw error;
+      if (type === 'sheet') {
+        // admin_delete_sheet verifies caller is admin server-side, bypasses RLS
+        const { error } = await db.rpc('admin_delete_sheet', { p_sheet_id: id });
+        if (error) throw error;
+      } else {
+        // admin_delete_user deletes from both profiles + auth.users server-side
+        const { error } = await db.rpc('admin_delete_user', { p_user_id: id });
+        if (error) throw error;
+      }
     } catch (error: any) {
       console.error("Deletion error:", error);
       alert(`Failed to delete: ${error.message || 'Unknown error'}`);
