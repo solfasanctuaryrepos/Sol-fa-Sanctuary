@@ -206,10 +206,27 @@ const App: React.FC = () => {
         .select('role, display_name')
         .eq('id', user.id)
         .maybeSingle();
+
+      const role = (profile?.role ?? (user.email === 'solfasanctuary@gmail.com' ? 'admin' : 'user')) as 'admin' | 'user';
+
+      // Create profile row if missing — covers OAuth sign-ins (Google etc.)
+      // which bypass the AuthModal signup form that normally creates it.
+      if (!profile) {
+        const displayName = (user as any).user_metadata?.full_name
+          || (user as any).user_metadata?.name
+          || user.email.split('@')[0];
+        await db.from('profiles').upsert({
+          id: user.id,
+          email: user.email,
+          display_name: displayName,
+          role,
+        }, { onConflict: 'id' });
+      }
+
       setCurrentUser({
         id: user.id,
         email: user.email,
-        role: (profile?.role ?? (user.email === 'solfasanctuary@gmail.com' ? 'admin' : 'user')) as 'admin' | 'user',
+        role,
         emailVerified: !!user.email_confirmed_at,
         displayName: profile?.display_name ?? undefined,
       });
