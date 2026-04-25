@@ -84,7 +84,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onUploadClick, onBrowseClick,
               {isLoggedIn ? <Upload size={20} /> : <LogIn size={20} />}
               {isLoggedIn ? 'Upload Music' : 'Get Started'}
             </button>
-            <form onSubmit={handleSearchSubmit} className="relative group flex-1 md:flex-none min-w-[300px]">
+            <form onSubmit={handleSearchSubmit} className="relative group flex-1 md:flex-none w-full md:min-w-[300px]">
               <Search className={`absolute left-4 top-1/2 -translate-y-1/2 transition-colors ${darkMode ? 'text-slate-500 group-hover:text-green-500' : 'text-slate-400 group-hover:text-green-600'}`} size={20} />
               <input 
                 type="text" 
@@ -99,7 +99,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onUploadClick, onBrowseClick,
             </form>
           </div>
         </div>
-        <div className="flex-1 relative w-full">
+        <div className="flex-1 relative w-full overflow-hidden">
           <div className={`absolute -inset-4 rounded-[40px] blur-3xl opacity-20 ${darkMode ? 'bg-green-500' : 'bg-green-300'}`}></div>
           <div className={`relative aspect-[16/10] rounded-[32px] overflow-hidden border shadow-2xl transition-colors duration-300 ${darkMode ? 'border-slate-800' : 'border-slate-200'}`}>
             <img 

@@ -469,7 +469,7 @@ const App: React.FC = () => {
     : "bg-slate-50 text-slate-900";
 
   return (
-    <div className={`min-h-screen transition-colors duration-300 selection:bg-green-500/30 selection:text-green-200 font-sans ${themeClasses}`}>
+    <div className={`min-h-screen overflow-x-hidden transition-colors duration-300 selection:bg-green-500/30 selection:text-green-200 font-sans ${themeClasses}`}>
       <UpdateBanner darkMode={darkMode} />
       {activePreview ? (
         <FullPreviewPage
