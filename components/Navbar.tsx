@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Home, Music, LayoutDashboard, ShieldAlert, Moon, Sun, LogOut, LogIn, Info, HelpCircle } from 'lucide-react';
+import { Home, Music, LayoutDashboard, ShieldAlert, Moon, Sun, LogOut, LogIn, Info, HelpCircle, Heart } from 'lucide-react';
 import { View } from '../types';
 
 interface NavbarProps {
@@ -12,9 +12,10 @@ interface NavbarProps {
   darkMode: boolean;
   onThemeToggle: () => void;
   onShowShortcuts?: () => void;
+  onDonate?: () => void;
 }
 
-const Navbar: React.FC<NavbarProps> = ({ activeView, onViewChange, currentUser, onLogout, onLogin, darkMode, onThemeToggle, onShowShortcuts }) => {
+const Navbar: React.FC<NavbarProps> = ({ activeView, onViewChange, currentUser, onLogout, onLogin, darkMode, onThemeToggle, onShowShortcuts, onDonate }) => {
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -71,6 +72,19 @@ const Navbar: React.FC<NavbarProps> = ({ activeView, onViewChange, currentUser, 
         </div>
 
         <div className="flex items-center gap-2">
+          {/* Donate button — visible to everyone */}
+          {onDonate && (
+            <button
+              onClick={onDonate}
+              title="Support Sol-fa Sanctuary"
+              aria-label="Support Sol-fa Sanctuary"
+              className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-green-500/30 text-green-500 hover:bg-green-500/10 transition-colors text-sm font-semibold"
+            >
+              <Heart size={15} className="fill-green-500" />
+              <span>Support</span>
+            </button>
+          )}
+
           <button
             onClick={onThemeToggle}
             aria-label={darkMode ? 'Switch to light mode' : 'Switch to dark mode'}
