@@ -71,17 +71,17 @@ const Navbar: React.FC<NavbarProps> = ({ activeView, onViewChange, currentUser, 
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
-          {/* Donate button — visible to everyone */}
+        <div className="flex items-center gap-1.5">
+          {/* Donate button — icon-only on mobile, icon + label on md+ */}
           {onDonate && (
             <button
               onClick={onDonate}
               title="Support Sol-fa Sanctuary"
               aria-label="Support Sol-fa Sanctuary"
-              className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-green-500/30 text-green-500 hover:bg-green-500/10 transition-colors text-sm font-semibold"
+              className="flex items-center gap-1.5 px-2 py-2 md:px-3 rounded-lg border border-green-500/30 text-green-500 hover:bg-green-500/10 transition-colors text-sm font-semibold"
             >
-              <Heart size={15} className="fill-green-500" />
-              <span>Support</span>
+              <Heart size={15} className="fill-green-500 shrink-0" />
+              <span className="hidden md:inline">Support</span>
             </button>
           )}
 
@@ -93,7 +93,7 @@ const Navbar: React.FC<NavbarProps> = ({ activeView, onViewChange, currentUser, 
           >
             {darkMode ? <Sun size={18} /> : <Moon size={18} />}
           </button>
-          
+
           {currentUser ? (
             <div className="relative" ref={menuRef}>
               <button 
@@ -135,12 +135,12 @@ const Navbar: React.FC<NavbarProps> = ({ activeView, onViewChange, currentUser, 
               )}
             </div>
           ) : (
-            <button 
+            <button
               onClick={onLogin}
-              className="flex items-center gap-2 px-5 py-2 bg-green-500 hover:bg-green-600 text-white font-bold rounded-lg transition-all shadow-lg shadow-green-500/10 active:scale-95"
+              className="flex items-center gap-1.5 px-3 py-2 md:px-5 bg-green-500 hover:bg-green-600 text-white font-bold rounded-lg transition-all shadow-lg shadow-green-500/10 active:scale-95 whitespace-nowrap"
             >
-              <LogIn size={18} />
-              Sign In
+              <LogIn size={16} className="shrink-0" />
+              <span className="text-sm">Sign In</span>
             </button>
           )}
         </div>
