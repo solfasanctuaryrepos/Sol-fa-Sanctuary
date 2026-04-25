@@ -8,6 +8,7 @@ import AdminDashboard from './components/AdminDashboard';
 import AboutPage from './components/AboutPage';
 import UploadModal from './components/UploadModal';
 import AuthModal from './components/AuthModal';
+import DonateModal, { DonateThankyouBanner } from './components/DonateModal';
 import FullPreviewPage from './components/FullPreviewPage';
 import ProfilePage from './components/ProfilePage';
 import CollectionsPage from './components/CollectionsPage';
@@ -51,6 +52,8 @@ const App: React.FC = () => {
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [isRecoveryMode, setIsRecoveryMode] = useState(false);
+  const [isDonateModalOpen, setIsDonateModalOpen] = useState(false);
+  const [showDonateThankyou, setShowDonateThankyou] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [activePreview, setActivePreview] = useState<MusicSheet | null>(null);
   const [sheets, setSheets] = useState<MusicSheet[]>([]);
@@ -71,6 +74,15 @@ const App: React.FC = () => {
     const params = new URLSearchParams(window.location.search);
     const sheetId = params.get('sheet');
     const collectionId = params.get('collection');
+
+    // Return from Moneroo checkout — show thank-you banner
+    if (params.get('donated') === 'true') {
+      setShowDonateThankyou(true);
+      // Clean the param from the URL without triggering a reload
+      const clean = new URL(window.location.href);
+      clean.searchParams.delete('donated');
+      window.history.replaceState({}, '', clean.toString());
+    }
     if (sheetId) {
       const fetchDeepLinkedSheet = async () => {
         try {
@@ -480,6 +492,7 @@ const App: React.FC = () => {
             darkMode={darkMode}
             onThemeToggle={toggleTheme}
             onShowShortcuts={() => { setShowShortcuts(true); }}
+            onDonate={() => setIsDonateModalOpen(true)}
           />
           
           <main className="max-w-7xl mx-auto px-4 pt-3 pb-12 lg:py-12 pb-24">
@@ -550,6 +563,21 @@ const App: React.FC = () => {
         darkMode={darkMode}
         recoveryMode={isRecoveryMode}
       />
+
+      {isDonateModalOpen && (
+        <DonateModal
+          darkMode={darkMode}
+          onClose={() => setIsDonateModalOpen(false)}
+          currentUserEmail={currentUser?.email}
+        />
+      )}
+
+      {showDonateThankyou && (
+        <DonateThankyouBanner
+          darkMode={darkMode}
+          onDismiss={() => setShowDonateThankyou(false)}
+        />
+      )}
 
       {showOnboarding && (
         <OnboardingTour
