@@ -53,7 +53,7 @@ const App: React.FC = () => {
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [isRecoveryMode, setIsRecoveryMode] = useState(false);
   const [isDonateModalOpen, setIsDonateModalOpen] = useState(false);
-  const [showDonateThankyou, setShowDonateThankyou] = useState(false);
+  const [donateBannerStatus, setDonateBannerStatus] = useState<'success' | 'failed' | 'cancelled' | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [activePreview, setActivePreview] = useState<MusicSheet | null>(null);
   const [sheets, setSheets] = useState<MusicSheet[]>([]);
@@ -75,12 +75,20 @@ const App: React.FC = () => {
     const sheetId = params.get('sheet');
     const collectionId = params.get('collection');
 
-    // Return from Moneroo checkout — show thank-you banner
-    if (params.get('donated') === 'true') {
-      setShowDonateThankyou(true);
-      // Clean the param from the URL without triggering a reload
+    // Return from Moneroo checkout — Moneroo appends ?paymentId=xxx&paymentStatus=success|failed|cancelled
+    // We also set payment=return so we can distinguish Moneroo returns from cold loads.
+    if (params.get('payment') === 'return') {
+      const status = params.get('paymentStatus') ?? 'success';
+      const bannerStatus =
+        status === 'success'   ? 'success'   :
+        status === 'failed'    ? 'failed'    :
+        status === 'cancelled' ? 'cancelled' : 'success';
+      setDonateBannerStatus(bannerStatus);
+      // Strip payment params from the URL cleanly
       const clean = new URL(window.location.href);
-      clean.searchParams.delete('donated');
+      clean.searchParams.delete('payment');
+      clean.searchParams.delete('paymentStatus');
+      clean.searchParams.delete('paymentId');
       window.history.replaceState({}, '', clean.toString());
     }
     if (sheetId) {
@@ -572,10 +580,11 @@ const App: React.FC = () => {
         />
       )}
 
-      {showDonateThankyou && (
+      {donateBannerStatus && (
         <DonateThankyouBanner
           darkMode={darkMode}
-          onDismiss={() => setShowDonateThankyou(false)}
+          status={donateBannerStatus}
+          onDismiss={() => setDonateBannerStatus(null)}
         />
       )}
 
