@@ -1,0 +1,28 @@
+name: Deploy to Coolify
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    name: Trigger Coolify deployment
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger deploy via Coolify API
+        run: |
+          response=$(curl -s -o /dev/null -w "%{http_code}" \
+            -X GET \
+            -H "Authorization: Bearer ${{ secrets.COOLIFY_TOKEN }}" \
+            -H "Accept: application/json" \
+            "http://76.13.138.43:8000/api/v1/deploy?uuid=ymhf0lnbs7cz1je1te0u09jc&force=false")
+
+          echo "Coolify response code: $response"
+
+          if [ "$response" != "200" ] && [ "$response" != "201" ]; then
+            echo "Deployment trigger failed with HTTP $response"
+            exit 1
+          fi
+
+          echo "Deployment queued successfully."
