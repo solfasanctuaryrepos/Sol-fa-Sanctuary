@@ -215,6 +215,8 @@ const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose, darkMode, us
           thumbnailUrl: insertedRow.thumbnail_url,
           pdfUrl: insertedRow.pdf_url,
           uploadedBy: insertedRow.uploaded_by,
+          commentsCount: 0,
+          likesCount: 0,
         };
         onSheetUploaded(mapped);
       }
