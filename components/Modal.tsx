@@ -92,11 +92,11 @@ const Modal: React.FC<ModalProps> = ({
     <div
       ref={overlayRef}
       onClick={handleOverlayClick}
-      className="fixed inset-0 z-[110] flex items-center justify-center px-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-300"
+      className="fixed inset-0 z-[110] overflow-y-auto flex items-start sm:items-center justify-center px-4 py-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-300"
     >
       <div
         ref={cardRef}
-        className={`w-full ${MAX_WIDTH_CLASSES[maxWidth] ?? 'max-w-md'} rounded-3xl overflow-hidden border animate-in zoom-in-95 duration-300 ${cardBg}`}
+        className={`w-full my-auto ${MAX_WIDTH_CLASSES[maxWidth] ?? 'max-w-md'} rounded-3xl overflow-hidden border animate-in zoom-in-95 duration-300 ${cardBg}`}
       >
         {children}
       </div>
