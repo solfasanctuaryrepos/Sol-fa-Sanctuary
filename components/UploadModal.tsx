@@ -1,8 +1,24 @@
-import React, { useRef, useState, useEffect } from 'react';
-import { X, Upload, FileText, Check, Loader2, AlertCircle, Mail, RefreshCw } from 'lucide-react';
+import React, { useRef, useState, useEffect, useCallback } from 'react';
+import { X, Upload, FileText, Check, Loader2, AlertCircle, Mail, RefreshCw, AlertTriangle, ChevronRight } from 'lucide-react';
 import { auth, db, storage, supabase } from '../supabase';
 import { MusicSheet } from '../types';
 import Modal from './Modal';
+
+function useDebounce<T>(value: T, ms: number): T {
+  const [dv, setDv] = useState(value);
+  useEffect(() => {
+    const h = setTimeout(() => setDv(value), ms);
+    return () => clearTimeout(h);
+  }, [value, ms]);
+  return dv;
+}
+
+interface SimilarSheet {
+  id: string;
+  title: string;
+  composer: string | null;
+  similarity_score: number;
+}
 
 interface UploadModalProps {
   isOpen: boolean;
@@ -12,13 +28,53 @@ interface UploadModalProps {
   isVerified: boolean;
   /** Called with the newly inserted sheet so the UI updates instantly. */
   onSheetUploaded?: (sheet: MusicSheet) => void;
+  /** Pre-fill title from a request fulfillment */
+  prefillTitle?: string;
+  prefillComposer?: string;
+  /** Request ID being fulfilled (links upload to request) */
+  fulfillingRequestId?: string;
+  onPreviewSheet?: (sheetId: string) => void;
 }
 
-const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose, darkMode, userEmail, isVerified, onSheetUploaded }) => {
+const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose, darkMode, userEmail, isVerified, onSheetUploaded, prefillTitle = '', prefillComposer = '', fulfillingRequestId, onPreviewSheet }) => {
   const [file, setFile] = useState<File | null>(null);
-  const [title, setTitle] = useState('');
-  const [composer, setComposer] = useState('');
+  const [title, setTitle] = useState(prefillTitle);
+  const [composer, setComposer] = useState(prefillComposer);
   const [type, setType] = useState('classical');
+  const [similarSheets, setSimilarSheets] = useState<SimilarSheet[]>([]);
+  const [checkingDupes, setCheckingDupes] = useState(false);
+
+  const debouncedTitle = useDebounce(title, 600);
+  const debouncedComposer = useDebounce(composer, 600);
+
+  // Pre-fill when props change (modal opens for a request fulfillment)
+  useEffect(() => {
+    if (isOpen) {
+      setTitle(prefillTitle);
+      setComposer(prefillComposer);
+      setSimilarSheets([]);
+    }
+  }, [isOpen, prefillTitle, prefillComposer]);
+
+  // Duplicate detection
+  useEffect(() => {
+    if (!debouncedTitle || debouncedTitle.length < 3) { setSimilarSheets([]); return; }
+    let cancelled = false;
+    (async () => {
+      setCheckingDupes(true);
+      try {
+        const { data } = await db.rpc('find_similar_sheets', {
+          p_title: debouncedTitle,
+          p_composer: debouncedComposer || null,
+          p_threshold: 0.3,
+        });
+        if (!cancelled) setSimilarSheets(data ?? []);
+      } catch { /* ignore */ } finally {
+        if (!cancelled) setCheckingDupes(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [debouncedTitle, debouncedComposer]);
   const [isPublic, setIsPublic] = useState(true);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadStatus, setUploadStatus] = useState('');
@@ -196,6 +252,15 @@ const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose, darkMode, us
 
       if (dbError) throw dbError;
 
+      // If fulfilling a request, mark it as fulfilled
+      if (fulfillingRequestId && insertedRow) {
+        await db.from('sheet_requests').update({
+          status: 'fulfilled',
+          fulfilled_sheet_id: insertedRow.id,
+          updated_at: new Date().toISOString(),
+        }).eq('id', fulfillingRequestId);
+      }
+
       // Optimistic UI: push the new sheet into the parent's list immediately
       // so it appears without waiting for the realtime subscription to re-fetch.
       if (insertedRow && onSheetUploaded) {
@@ -297,20 +362,25 @@ const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose, darkMode, us
           <form className="p-6 space-y-6" onSubmit={handleSubmit}>
             <div className="space-y-2">
               <label className={`text-sm font-medium ${darkMode ? 'text-slate-300' : 'text-slate-700'}`}>Title</label>
-              <input 
-                type="text" 
-                required
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                placeholder="e.g. Behold Our God"
-                className={`w-full rounded-lg px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-green-500/20 focus:border-green-500 transition-all ${inputBg} ${darkMode ? 'text-white' : 'text-black'}`}
-              />
+              <div className="relative">
+                <input
+                  type="text"
+                  required
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  placeholder="e.g. Behold Our God"
+                  className={`w-full rounded-lg px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-green-500/20 focus:border-green-500 transition-all ${inputBg} ${darkMode ? 'text-white' : 'text-black'}`}
+                />
+                {checkingDupes && (
+                  <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 animate-spin text-slate-400" size={14} />
+                )}
+              </div>
             </div>
 
             <div className="space-y-2">
               <label className={`text-sm font-medium ${darkMode ? 'text-slate-300' : 'text-slate-700'}`}>Composed by</label>
-              <input 
-                type="text" 
+              <input
+                type="text"
                 required
                 value={composer}
                 onChange={(e) => setComposer(e.target.value)}
@@ -318,6 +388,35 @@ const UploadModal: React.FC<UploadModalProps> = ({ isOpen, onClose, darkMode, us
                 className={`w-full rounded-lg px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-green-500/20 focus:border-green-500 transition-all ${inputBg} ${darkMode ? 'text-white' : 'text-black'}`}
               />
             </div>
+
+            {/* Duplicate detection warning */}
+            {similarSheets.length > 0 && (
+              <div className={`rounded-xl border p-4 space-y-2 ${darkMode ? 'bg-amber-500/5 border-amber-500/20' : 'bg-amber-50 border-amber-200'}`}>
+                <div className="flex items-center gap-2">
+                  <AlertTriangle size={15} className="text-amber-500 shrink-0" />
+                  <p className={`text-sm font-semibold ${darkMode ? 'text-amber-400' : 'text-amber-700'}`}>
+                    Similar sheet{similarSheets.length > 1 ? 's' : ''} already in the library
+                  </p>
+                </div>
+                <div className="space-y-1.5">
+                  {similarSheets.map(s => (
+                    <button
+                      key={s.id}
+                      type="button"
+                      onClick={() => { onPreviewSheet?.(s.id); onClose(); }}
+                      className={`w-full text-left flex items-center justify-between px-3 py-2 rounded-lg text-sm transition-colors ${darkMode ? 'bg-slate-800 hover:bg-slate-700' : 'bg-white hover:bg-slate-50 border border-slate-200'}`}
+                    >
+                      <span>
+                        <span className={`font-medium ${darkMode ? 'text-slate-200' : 'text-slate-800'}`}>{s.title}</span>
+                        {s.composer && <span className="text-slate-500 ml-2">— {s.composer}</span>}
+                      </span>
+                      <ChevronRight size={14} className="text-slate-400 shrink-0" />
+                    </button>
+                  ))}
+                </div>
+                <p className={`text-xs ${darkMode ? 'text-slate-500' : 'text-slate-400'}`}>You can still upload if this is a different arrangement or edition.</p>
+              </div>
+            )}
 
             <div className="space-y-2">
               <label className={`text-sm font-medium ${darkMode ? 'text-slate-300' : 'text-slate-700'}`}>Music Type</label>

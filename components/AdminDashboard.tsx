@@ -1,7 +1,7 @@
 
-import { Search, Trash2, ChevronDown, Music, List, Grid, X, ArrowUp, ArrowDown, Lock, Unlock, Globe, Eye, Download, Check, Settings2, Calendar, Users, Shield, User as UserIcon, AlertTriangle, MoreVertical, ChevronLeft, ChevronRight, Heart, MessageSquare } from 'lucide-react';
+import { Search, Trash2, ChevronDown, Music, List, Grid, X, ArrowUp, ArrowDown, Lock, Unlock, Globe, Eye, Download, Check, Settings2, Calendar, Users, Shield, User as UserIcon, AlertTriangle, MoreVertical, ChevronLeft, ChevronRight, Heart, MessageSquare, BookOpen, ThumbsUp, CheckCircle2, Clock, XCircle } from 'lucide-react';
 import React, { useState, useRef, useEffect, useCallback, memo } from 'react';
-import { AdminTab, MusicSheet, User } from '../types';
+import { AdminTab, MusicSheet, User, SheetRequest } from '../types';
 import { db } from '../supabase';
 import Modal from './Modal';
 
@@ -34,6 +34,27 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onPreview, darkMode, sh
   const [sheetPage, setSheetPage] = useState(1);
   const [userPage, setUserPage] = useState(1);
   const [roleChangeConfirmation, setRoleChangeConfirmation] = useState<{ user: User; newRole: 'admin' | 'user' } | null>(null);
+  const [adminRequests, setAdminRequests] = useState<SheetRequest[]>([]);
+  const [requestsLoading, setRequestsLoading] = useState(false);
+  const [requestStatusFilter, setRequestStatusFilter] = useState<'all' | 'open' | 'in_progress' | 'fulfilled' | 'closed'>('all');
+
+  useEffect(() => {
+    if (activeTab !== 'requests') return;
+    setRequestsLoading(true);
+    db.from('sheet_requests')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .limit(100)
+      .then(({ data }) => {
+        setAdminRequests((data ?? []) as SheetRequest[]);
+        setRequestsLoading(false);
+      });
+  }, [activeTab]);
+
+  const handleRequestStatusChange = async (reqId: string, newStatus: SheetRequest['status']) => {
+    await db.from('sheet_requests').update({ status: newStatus, updated_at: new Date().toISOString() }).eq('id', reqId);
+    setAdminRequests(prev => prev.map(r => r.id === reqId ? { ...r, status: newStatus } : r));
+  };
 
   // State for the custom delete confirmation modal
   const [deleteConfirmation, setDeleteConfirmation] = useState<{
@@ -314,11 +335,17 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onPreview, darkMode, sh
         >
           <Users size={16} /> <span className="hidden sm:inline">User Management</span><span className="sm:hidden">Users</span>
         </button>
-        <button 
+        <button
           onClick={() => setActiveTab('content')}
           className={`px-4 md:px-6 py-2 rounded-lg text-xs md:text-sm font-medium transition-all flex items-center gap-2 ${activeTab === 'content' ? (darkMode ? 'bg-slate-800 text-slate-100 shadow-lg' : 'bg-white text-slate-900 shadow-sm') : (darkMode ? 'text-slate-500 hover:text-slate-300' : 'text-slate-600 hover:text-slate-800')}`}
         >
           <Music size={16} /> <span className="hidden sm:inline">Content Moderation</span><span className="sm:hidden">Content</span>
+        </button>
+        <button
+          onClick={() => setActiveTab('requests')}
+          className={`px-4 md:px-6 py-2 rounded-lg text-xs md:text-sm font-medium transition-all flex items-center gap-2 ${activeTab === 'requests' ? (darkMode ? 'bg-slate-800 text-slate-100 shadow-lg' : 'bg-white text-slate-900 shadow-sm') : (darkMode ? 'text-slate-500 hover:text-slate-300' : 'text-slate-600 hover:text-slate-800')}`}
+        >
+          <BookOpen size={16} /> <span className="hidden sm:inline">Sheet Requests</span><span className="sm:hidden">Requests</span>
         </button>
       </div>
 
@@ -742,6 +769,94 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onPreview, darkMode, sh
             <span>{userPage} / {totalUserPages}</span>
             <button onClick={() => setUserPage(p => Math.min(totalUserPages, p + 1))} disabled={userPage === totalUserPages} className="p-1.5 rounded hover:text-green-500 transition-colors disabled:opacity-30"><ChevronRight size={16} /></button>
           </div>
+        </div>
+      )}
+
+      {/* Requests management tab */}
+      {activeTab === 'requests' && (
+        <div className="space-y-6">
+          {/* Status filter pills */}
+          <div className="flex gap-2 flex-wrap">
+            {(['all', 'open', 'in_progress', 'fulfilled', 'closed'] as const).map(f => (
+              <button
+                key={f}
+                onClick={() => setRequestStatusFilter(f)}
+                className={`px-3 py-1.5 rounded-full text-xs font-bold border transition-colors capitalize ${
+                  requestStatusFilter === f
+                    ? 'bg-amber-500 text-white border-amber-500'
+                    : darkMode
+                      ? 'bg-transparent border-slate-700 text-slate-400 hover:border-slate-500 hover:text-slate-200'
+                      : 'bg-transparent border-slate-200 text-slate-600 hover:border-slate-400'
+                }`}
+              >
+                {f === 'in_progress' ? 'In Progress' : f.charAt(0).toUpperCase() + f.slice(1)}
+              </button>
+            ))}
+          </div>
+
+          {requestsLoading ? (
+            <div className="space-y-3">
+              {[...Array(5)].map((_, i) => (
+                <div key={i} className={`h-16 rounded-2xl border animate-pulse ${darkMode ? 'bg-slate-900 border-slate-800' : 'bg-slate-100 border-slate-200'}`} />
+              ))}
+            </div>
+          ) : (
+            <div className={`border rounded-2xl overflow-hidden ${darkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200 shadow-sm'}`}>
+              <table className="w-full text-sm">
+                <thead className={`text-xs uppercase tracking-wider ${darkMode ? 'bg-slate-950/50 text-slate-500' : 'bg-slate-50 text-slate-400'}`}>
+                  <tr>
+                    <th className="px-4 py-3 text-left font-medium">Title</th>
+                    <th className="hidden md:table-cell px-4 py-3 text-left font-medium">Composer</th>
+                    <th className="hidden lg:table-cell px-4 py-3 text-left font-medium">Requested By</th>
+                    <th className="px-4 py-3 text-center font-medium">Votes</th>
+                    <th className="px-4 py-3 text-center font-medium">Status</th>
+                    <th className="px-4 py-3 text-left font-medium">Date</th>
+                  </tr>
+                </thead>
+                <tbody className={`divide-y ${darkMode ? 'divide-slate-800' : 'divide-slate-100'}`}>
+                  {adminRequests
+                    .filter(r => requestStatusFilter === 'all' || r.status === requestStatusFilter)
+                    .map(req => (
+                      <tr key={req.id} className={`transition-colors ${darkMode ? 'hover:bg-slate-800/50' : 'hover:bg-slate-50'}`}>
+                        <td className="px-4 py-3">
+                          <p className={`font-medium truncate max-w-[200px] ${textPrimary}`}>{req.title}</p>
+                          {req.notes && <p className={`text-xs truncate max-w-[200px] ${textSecondary}`}>{req.notes}</p>}
+                        </td>
+                        <td className="hidden md:table-cell px-4 py-3 text-sm text-slate-500">{req.composer ?? '—'}</td>
+                        <td className="hidden lg:table-cell px-4 py-3 text-sm text-slate-500">{req.requester_name ?? req.requester_email ?? 'Anonymous'}</td>
+                        <td className="px-4 py-3 text-center">
+                          <span className={`flex items-center justify-center gap-1 text-sm font-semibold ${darkMode ? 'text-amber-400' : 'text-amber-600'}`}>
+                            <ThumbsUp size={13} /> {req.votes_count}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-center">
+                          <select
+                            value={req.status}
+                            onChange={e => handleRequestStatusChange(req.id, e.target.value as SheetRequest['status'])}
+                            className={`text-xs rounded-lg px-2 py-1 border cursor-pointer focus:outline-none ${darkMode ? 'bg-slate-800 border-slate-700 text-slate-300' : 'bg-white border-slate-200 text-slate-700'}`}
+                          >
+                            <option value="open">Open</option>
+                            <option value="in_progress">In Progress</option>
+                            <option value="fulfilled">Fulfilled</option>
+                            <option value="closed">Closed</option>
+                          </select>
+                        </td>
+                        <td className="px-4 py-3 text-sm text-slate-500">
+                          {new Date(req.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                        </td>
+                      </tr>
+                    ))}
+                  {adminRequests.filter(r => requestStatusFilter === 'all' || r.status === requestStatusFilter).length === 0 && (
+                    <tr>
+                      <td colSpan={6} className="px-6 py-12 text-center text-slate-500">
+                        No requests found
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       )}
 

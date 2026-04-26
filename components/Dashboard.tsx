@@ -1,7 +1,7 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { Upload, Music, Eye, Download, Search, List, Grid, MoreVertical, Edit2, Trash2, FileText, ArrowUp, ArrowDown, X, Check, Lock, ShieldAlert, Globe, AlertTriangle, Heart, BarChart2, RefreshCw, BookOpen, MessageSquare } from 'lucide-react';
-import { MusicSheet } from '../types';
+import { Upload, Music, Eye, Download, Search, List, Grid, MoreVertical, Edit2, Trash2, FileText, ArrowUp, ArrowDown, X, Check, Lock, ShieldAlert, Globe, AlertTriangle, Heart, BarChart2, RefreshCw, BookOpen, MessageSquare, ThumbsUp, Clock, CheckCircle2 } from 'lucide-react';
+import { MusicSheet, SheetRequest } from '../types';
 import { db, storage } from '../supabase';
 import Modal from './Modal';
 
@@ -19,10 +19,11 @@ interface DashboardProps {
   userFavorites?: string[];
   onFavoritesChange?: (favs: string[]) => void;
   onNavigateCollections?: () => void;
+  onRequestSheet?: () => void;
 }
 
 type SortConfig = { key: keyof MusicSheet; direction: 'asc' | 'desc' } | null;
-type DashTab = 'mine' | 'favourites';
+type DashTab = 'mine' | 'favourites' | 'requests';
 
 // ── Analytics panel ───────────────────────────────────────────────────────────
 interface DayData { views: number; downloads: number; label: string; }
@@ -127,18 +128,34 @@ const AnalyticsPanel: React.FC<{ sheet: MusicSheet; darkMode: boolean; onClose: 
 };
 // ─────────────────────────────────────────────────────────────────────────────
 
-const Dashboard: React.FC<DashboardProps> = ({ onUploadClick, onPreview, darkMode, sheets, userEmail, userId, onSheetDeleted, onSheetUpdated, userFavorites = [], onFavoritesChange, onNavigateCollections }) => {
+const Dashboard: React.FC<DashboardProps> = ({ onUploadClick, onPreview, darkMode, sheets, userEmail, userId, onSheetDeleted, onSheetUpdated, userFavorites = [], onFavoritesChange, onNavigateCollections, onRequestSheet }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [viewMode, setViewMode] = useState<'list' | 'grid'>('grid');
   const [sortConfig, setSortConfig] = useState<SortConfig>(null);
   const [activeMobileMenuId, setActiveMobileMenuId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<DashTab>('mine');
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [myRequests, setMyRequests] = useState<SheetRequest[]>([]);
+  const [requestsLoading, setRequestsLoading] = useState(false);
   const [batchDeleteConfirm, setBatchDeleteConfirm] = useState(false);
   const [selectedSheetForAnalytics, setSelectedSheetForAnalytics] = useState<MusicSheet | null>(null);
 
   const userSheets = sheets.filter(sheet => sheet.uploadedBy === userEmail);
   const favoriteSheets = sheets.filter(s => userFavorites.includes(s.id) && s.isPublic && !s.isAdminRestricted);
+
+  useEffect(() => {
+    if (activeTab !== 'requests' || !userId) return;
+    setRequestsLoading(true);
+    db.from('sheet_requests')
+      .select('*')
+      .eq('requested_by', userId)
+      .order('created_at', { ascending: false })
+      .limit(50)
+      .then(({ data }) => {
+        setMyRequests((data ?? []) as SheetRequest[]);
+        setRequestsLoading(false);
+      });
+  }, [activeTab, userId]);
   const [editingSheet, setEditingSheet] = useState<MusicSheet | null>(null);
   const [deleteConfirmation, setDeleteConfirmation] = useState<{
     id: string;
@@ -357,7 +374,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onUploadClick, onPreview, darkMod
         ))}
       </div>
 
-      {/* Tab switcher: My Sheets / Favourites */}
+      {/* Tab switcher: My Sheets / Favourites / Requests */}
       <div className={`flex w-fit rounded-xl overflow-hidden border transition-colors p-1 ${darkMode ? 'bg-slate-900/50 border-slate-800' : 'bg-slate-200 border-slate-300'}`}>
         <button
           onClick={() => setActiveTab('mine')}
@@ -370,6 +387,12 @@ const Dashboard: React.FC<DashboardProps> = ({ onUploadClick, onPreview, darkMod
           className={`px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-2 ${activeTab === 'favourites' ? (darkMode ? 'bg-slate-800 text-slate-100 shadow-lg' : 'bg-white text-slate-900 shadow-sm') : (darkMode ? 'text-slate-500 hover:text-slate-300' : 'text-slate-600 hover:text-slate-800')}`}
         >
           <Heart size={15} /> My Favourites <span className="text-[10px] font-bold ml-0.5">({favoriteSheets.length})</span>
+        </button>
+        <button
+          onClick={() => setActiveTab('requests')}
+          className={`px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-2 ${activeTab === 'requests' ? (darkMode ? 'bg-slate-800 text-slate-100 shadow-lg' : 'bg-white text-slate-900 shadow-sm') : (darkMode ? 'text-slate-500 hover:text-slate-300' : 'text-slate-600 hover:text-slate-800')}`}
+        >
+          <BookOpen size={15} /> My Requests
         </button>
       </div>
 
@@ -408,6 +431,71 @@ const Dashboard: React.FC<DashboardProps> = ({ onUploadClick, onPreview, darkMod
                   </div>
                 </div>
               ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Requests tab */}
+      {activeTab === 'requests' && (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <p className={`text-sm ${textSecondary}`}>Sheets you've asked the community to upload.</p>
+            <button
+              onClick={onRequestSheet}
+              className="flex items-center gap-2 px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white text-sm font-bold rounded-xl transition-all"
+            >
+              <BookOpen size={14} /> New Request
+            </button>
+          </div>
+          {requestsLoading ? (
+            <div className="space-y-3">
+              {[...Array(3)].map((_, i) => (
+                <div key={i} className={`h-20 rounded-2xl border animate-pulse ${darkMode ? 'bg-slate-900 border-slate-800' : 'bg-slate-100 border-slate-200'}`} />
+              ))}
+            </div>
+          ) : myRequests.length === 0 ? (
+            <div className={`py-16 text-center border-2 border-dashed rounded-2xl ${darkMode ? 'border-slate-800 text-slate-500' : 'border-slate-200 text-slate-400'}`}>
+              <BookOpen size={40} className="mx-auto mb-3 opacity-20" />
+              <p>No requests yet.</p>
+              <p className="text-xs mt-1">Can't find a sheet? Submit a request and the community will help.</p>
+              <button
+                onClick={onRequestSheet}
+                className="mt-4 px-5 py-2 bg-amber-500 hover:bg-amber-600 text-white text-sm font-bold rounded-xl transition-all"
+              >
+                Request a Sheet
+              </button>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {myRequests.map(req => {
+                const statusMap: Record<string, { label: string; cls: string }> = {
+                  open:        { label: 'Open',        cls: 'bg-blue-500/10 text-blue-500 border-blue-500/20' },
+                  in_progress: { label: 'In Progress', cls: 'bg-amber-500/10 text-amber-500 border-amber-500/20' },
+                  fulfilled:   { label: 'Fulfilled',   cls: 'bg-green-500/10 text-green-500 border-green-500/20' },
+                  closed:      { label: 'Closed',      cls: 'bg-slate-500/10 text-slate-400 border-slate-500/20' },
+                };
+                const st = statusMap[req.status] ?? statusMap.open;
+                return (
+                  <div key={req.id} className={`flex items-center gap-4 p-4 border rounded-2xl ${darkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200 shadow-sm'}`}>
+                    <div className="flex-1 min-w-0">
+                      <p className={`font-semibold truncate ${textPrimary}`}>{req.title}</p>
+                      {req.composer && <p className={`text-sm truncate ${textSecondary}`}>{req.composer}</p>}
+                      <p className={`text-xs mt-0.5 ${darkMode ? 'text-slate-500' : 'text-slate-400'}`}>
+                        {new Date(req.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-3 shrink-0">
+                      <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-xs font-medium ${st.cls}`}>
+                        {st.label}
+                      </span>
+                      <span className={`flex items-center gap-1 text-sm font-semibold ${darkMode ? 'text-amber-400' : 'text-amber-600'}`}>
+                        <ThumbsUp size={13} /> {req.votes_count}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           )}
         </div>

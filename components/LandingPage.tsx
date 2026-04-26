@@ -1,7 +1,7 @@
 
-import React, { useState } from 'react';
-import { Upload, Search, Shield, Share2, ArrowRight, Eye, Download, LogIn, Music, Heart, MessageSquare } from 'lucide-react';
-import { MusicSheet } from '../types';
+import React, { useState, useEffect } from 'react';
+import { Upload, Search, Shield, Share2, ArrowRight, Eye, Download, LogIn, Music, Heart, MessageSquare, BookOpen, ThumbsUp } from 'lucide-react';
+import { MusicSheet, SheetRequest } from '../types';
 import { db } from '../supabase';
 
 interface LandingPageProps {
@@ -17,6 +17,8 @@ interface LandingPageProps {
   onFavoritesChange?: (favs: string[]) => void;
   onAuthRequired?: () => void;
   onViewProfile?: (email: string) => void;
+  onRequestSheet?: () => void;
+  onBrowseRequests?: () => void;
 }
 
 const ONE_WEEK_MS = 7 * 24 * 60 * 60 * 1000;
@@ -27,8 +29,21 @@ function isNewThisWeek(uploadedAt: string): boolean {
   } catch { return false; }
 }
 
-const LandingPage: React.FC<LandingPageProps> = ({ onUploadClick, onBrowseClick, onSearch, onPreview, isLoggedIn, darkMode, sheets, currentUserId, userFavorites = [], onFavoritesChange, onAuthRequired }) => {
+const LandingPage: React.FC<LandingPageProps> = ({ onUploadClick, onBrowseClick, onSearch, onPreview, isLoggedIn, darkMode, sheets, currentUserId, userFavorites = [], onFavoritesChange, onAuthRequired, onRequestSheet, onBrowseRequests }) => {
   const [localSearch, setLocalSearch] = useState('');
+  const [topRequests, setTopRequests] = useState<SheetRequest[]>([]);
+
+  useEffect(() => {
+    (async () => {
+      const { data } = await db
+        .from('sheet_requests')
+        .select('*')
+        .in('status', ['open', 'in_progress'])
+        .order('votes_count', { ascending: false })
+        .limit(5);
+      setTopRequests((data ?? []) as SheetRequest[]);
+    })();
+  }, []);
 
   const handleToggleFavorite = async (e: React.MouseEvent, sheet: MusicSheet) => {
     e.stopPropagation();
@@ -197,6 +212,58 @@ const LandingPage: React.FC<LandingPageProps> = ({ onUploadClick, onBrowseClick,
             View Full Library <ArrowRight size={18} />
           </button>
         </div>
+      </section>
+
+      {/* Community Wishlist Strip */}
+      <section className={`rounded-3xl border p-8 md:p-12 space-y-8 ${darkMode ? 'bg-slate-900/50 border-slate-800' : 'bg-amber-50 border-amber-100'}`}>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="space-y-1">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-500/10 border border-amber-500/20 text-amber-500 text-xs font-bold uppercase tracking-wider">
+              <BookOpen size={13} /> Community Wishlist
+            </div>
+            <h2 className={`text-2xl font-serif font-bold ${textPrimaryClass}`}>Most Wanted Sheets</h2>
+            <p className={`text-sm ${textSecondaryClass}`}>Help the community by uploading one of these requested scores.</p>
+          </div>
+          <div className="flex gap-3 shrink-0">
+            <button
+              onClick={onBrowseRequests}
+              className={`px-4 py-2 rounded-xl border text-sm font-medium transition-colors ${darkMode ? 'border-slate-700 text-slate-300 hover:text-white' : 'border-amber-200 text-amber-700 hover:bg-amber-100'}`}
+            >
+              View all
+            </button>
+            <button
+              onClick={onRequestSheet}
+              className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white text-sm font-bold rounded-xl transition-all"
+            >
+              + Request
+            </button>
+          </div>
+        </div>
+
+        {topRequests.length === 0 ? (
+          <p className={`text-sm ${textSecondaryClass}`}>No requests yet — be the first!</p>
+        ) : (
+          <div className="space-y-3">
+            {topRequests.map((req, i) => (
+              <div
+                key={req.id}
+                className={`flex items-center gap-4 p-4 rounded-2xl border transition-colors cursor-pointer ${darkMode ? 'bg-slate-900 border-slate-800 hover:border-slate-700' : 'bg-white border-amber-100 hover:border-amber-300 shadow-sm'}`}
+                onClick={onBrowseRequests}
+              >
+                <span className={`text-2xl font-serif font-bold w-8 text-center ${i < 3 ? 'text-amber-500' : textSecondaryClass}`}>
+                  {i + 1}
+                </span>
+                <div className="flex-1 min-w-0">
+                  <p className={`font-semibold truncate ${textPrimaryClass}`}>{req.title}</p>
+                  {req.composer && <p className={`text-sm truncate ${textSecondaryClass}`}>{req.composer}</p>}
+                </div>
+                <div className={`flex items-center gap-1.5 shrink-0 text-sm font-semibold ${darkMode ? 'text-amber-400' : 'text-amber-600'}`}>
+                  <ThumbsUp size={14} /> {req.votes_count}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </section>
 
       <footer className={`pt-16 pb-8 border-t text-center ${darkMode ? 'border-slate-900 text-slate-500' : 'border-slate-200 text-slate-400'}`}>
