@@ -162,7 +162,7 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, darkMode, recove
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} darkMode={darkMode} maxWidth="md" loading={loading}>
-      <div className="relative p-8">
+      <div className="relative p-5 sm:p-8">
         <button onClick={onClose} aria-label="Close sign in modal" className="absolute top-6 right-6 text-slate-400 hover:text-green-500 transition-colors">
           <X size={20} />
         </button>
