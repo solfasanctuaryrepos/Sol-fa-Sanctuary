@@ -69,11 +69,34 @@ const App: React.FC = () => {
   const lastQueryKeyRef = useRef<string>('');
 
 
+  // Views that are meaningful to restore on refresh.
+  // 'profile' and 'collections' are contextual (need extra state) — they reset to home.
+  const HASHABLE_VIEWS: View[] = ['library', 'dashboard', 'admin', 'about', 'help'];
+
+  // Sync current view → URL hash so the page survives a refresh.
+  useEffect(() => {
+    if (activePreview) return; // sheet preview owns the URL via ?sheet= param
+    if (HASHABLE_VIEWS.includes(currentView)) {
+      window.history.replaceState(null, '', `#${currentView}`);
+    } else if (currentView === 'home') {
+      // Strip hash for home so the URL stays clean
+      const clean = window.location.href.split('#')[0];
+      window.history.replaceState(null, '', clean);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentView, activePreview]);
+
   // Deep linking logic: Check for sheet/collection ID in URL on mount
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const sheetId = params.get('sheet');
     const collectionId = params.get('collection');
+
+    // Restore view from URL hash on refresh (e.g. #library → library view)
+    const hash = window.location.hash.replace('#', '') as View;
+    if (HASHABLE_VIEWS.includes(hash) && !sheetId) {
+      setCurrentView(hash);
+    }
 
     // Return from Moneroo checkout — Moneroo appends ?paymentId=xxx&paymentStatus=success|failed|cancelled
     // We also set payment=return so we can distinguish Moneroo returns from cold loads.

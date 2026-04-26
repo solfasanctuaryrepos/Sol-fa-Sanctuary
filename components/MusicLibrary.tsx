@@ -111,6 +111,7 @@ const SheetCard = memo(({ sheet, onPreview, activeMobileMenuId, setActiveMobileM
         <button
           onClick={(e) => { e.stopPropagation(); onToggleFavorite(sheet); }}
           aria-label={isFavorited ? 'Remove from favourites' : 'Add to favourites'}
+          title={isFavorited ? 'Remove from favourites' : 'Add to favourites'}
           className={`absolute top-2 right-2 z-10 p-1.5 rounded-full backdrop-blur-sm transition-all ${isFavorited ? 'bg-rose-500 text-white' : 'bg-black/40 text-white/70 hover:text-rose-400'}`}
         >
           <Heart size={14} className={isFavorited ? 'fill-current' : ''} />
@@ -439,8 +440,8 @@ const MusicLibrary: React.FC<MusicLibraryProps> = ({ darkMode, initialSearch = '
                   {visibleColumns.type && <th className="hidden lg:table-cell px-6 py-4 cursor-pointer hover:text-green-500 transition-colors" onClick={() => handleSort('type')}><div className="flex items-center">Type <SortIcon colKey="type" /></div></th>}
                   {visibleColumns.uploadedAt && <th className="hidden xl:table-cell px-6 py-4 cursor-pointer hover:text-green-500 transition-colors" onClick={() => handleSort('uploadedAt')}><div className="flex items-center">Uploaded <SortIcon colKey="uploadedAt" /></div></th>}
                   {visibleColumns.views && <th className="px-4 md:px-6 py-4 text-center cursor-pointer hover:text-green-500 transition-colors" onClick={() => handleSort('views')}><div className="flex justify-center items-center">Views <SortIcon colKey="views" /></div></th>}
-                  <th className="hidden sm:table-cell px-4 md:px-6 py-4 text-center"><div className="flex justify-center items-center"><Heart size={12} /></div></th>
-                  <th className="hidden sm:table-cell px-4 md:px-6 py-4 text-center"><div className="flex justify-center items-center"><MessageSquare size={12} /></div></th>
+                  <th className="hidden sm:table-cell px-4 md:px-6 py-4 text-center" title="Likes"><div className="flex justify-center items-center"><Heart size={12} /></div></th>
+                  <th className="hidden sm:table-cell px-4 md:px-6 py-4 text-center" title="Comments"><div className="flex justify-center items-center"><MessageSquare size={12} /></div></th>
                 </tr>
               </thead>
               <tbody className={`divide-y ${darkMode ? 'divide-slate-800' : 'divide-slate-100'}`}>

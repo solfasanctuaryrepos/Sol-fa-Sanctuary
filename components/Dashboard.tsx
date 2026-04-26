@@ -587,8 +587,8 @@ const Dashboard: React.FC<DashboardProps> = ({ onUploadClick, onPreview, darkMod
                     <th className="hidden md:table-cell px-6 py-4 text-center cursor-pointer hover:text-green-500 transition-colors" onClick={() => handleSort('downloads')}>
                       <div className="flex justify-center items-center">Downloads <SortIcon colKey="downloads" /></div>
                     </th>
-                    <th className="hidden md:table-cell px-6 py-4 text-center"><div className="flex justify-center"><Heart size={12} /></div></th>
-                    <th className="hidden md:table-cell px-6 py-4 text-center"><div className="flex justify-center"><MessageSquare size={12} /></div></th>
+                    <th className="hidden md:table-cell px-6 py-4 text-center" title="Likes"><div className="flex justify-center"><Heart size={12} /></div></th>
+                    <th className="hidden md:table-cell px-6 py-4 text-center" title="Comments"><div className="flex justify-center"><MessageSquare size={12} /></div></th>
                     <th className="px-4 md:px-6 py-4 text-right">Actions</th>
                   </tr>
                 </thead>
