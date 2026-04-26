@@ -15,8 +15,9 @@ import CollectionsPage from './components/CollectionsPage';
 import OnboardingTour from './components/OnboardingTour';
 import UpdateBanner from './components/UpdateBanner';
 import HelpPage from './components/HelpPage';
+import RequestModal from './components/RequestModal';
 import { useKeyboardShortcuts, ShortcutsOverlay } from './components/KeyboardShortcuts';
-import { View, MusicSheet } from './types';
+import { View, MusicSheet, SheetRequest } from './types';
 import { supabase, auth, db } from './supabase';
 import { useTheme } from './contexts/ThemeContext';
 
@@ -63,6 +64,10 @@ const App: React.FC = () => {
   const [profileEmail, setProfileEmail] = useState<string>('');
   const [showOnboarding, setShowOnboarding] = useState(() => !localStorage.getItem('solfa-onboarded'));
   const [showShortcuts, setShowShortcuts] = useState(false);
+  const [isRequestModalOpen, setIsRequestModalOpen] = useState(false);
+  const [requestPrefillTitle, setRequestPrefillTitle] = useState('');
+  const [requestPrefillComposer, setRequestPrefillComposer] = useState('');
+  const [fulfillRequest, setFulfillRequest] = useState<SheetRequest | null>(null);
   // Guards onAuthStateChange from firing before getSession() resolves.
   const authReadyRef = useRef(false);
   // Tracks the last sheet query key to skip redundant re-fetches.
@@ -401,6 +406,8 @@ const App: React.FC = () => {
             onFavoritesChange={setUserFavorites}
             onAuthRequired={() => setIsAuthModalOpen(true)}
             onViewProfile={handleViewProfile}
+            onRequestSheet={() => { setRequestPrefillTitle(''); setRequestPrefillComposer(''); setIsRequestModalOpen(true); }}
+            onBrowseRequests={() => { setSearchQuery(''); setCurrentView('library'); }}
           />
         );
       case 'dashboard':
@@ -417,6 +424,7 @@ const App: React.FC = () => {
             userFavorites={userFavorites}
             onFavoritesChange={setUserFavorites}
             onNavigateCollections={() => { setPreviousView(currentView); setPreviousPreview(null); setCurrentView('collections'); }}
+            onRequestSheet={() => { setRequestPrefillTitle(''); setRequestPrefillComposer(''); setIsRequestModalOpen(true); }}
           />
         ) : null;
       case 'library':
@@ -431,6 +439,13 @@ const App: React.FC = () => {
             onFavoritesChange={setUserFavorites}
             onAuthRequired={() => setIsAuthModalOpen(true)}
             onViewProfile={handleViewProfile}
+            onRequestSheet={(t) => { setRequestPrefillTitle(t ?? ''); setRequestPrefillComposer(''); setIsRequestModalOpen(true); }}
+            onFulfillRequest={(req) => {
+              setFulfillRequest(req);
+              setRequestPrefillTitle(req.title);
+              setRequestPrefillComposer(req.composer ?? '');
+              setIsUploadModalOpen(true);
+            }}
           />
         );
       case 'admin':
@@ -483,6 +498,8 @@ const App: React.FC = () => {
           onFavoritesChange={setUserFavorites}
           onAuthRequired={() => setIsAuthModalOpen(true)}
           onViewProfile={handleViewProfile}
+          onRequestSheet={() => { setRequestPrefillTitle(''); setRequestPrefillComposer(''); setIsRequestModalOpen(true); }}
+          onBrowseRequests={() => { setSearchQuery(''); setCurrentView('library'); }}
         />;
     }
   };
@@ -581,11 +598,35 @@ const App: React.FC = () => {
 
       <UploadModal
         isOpen={isUploadModalOpen}
-        onClose={() => setIsUploadModalOpen(false)}
+        onClose={() => { setIsUploadModalOpen(false); setFulfillRequest(null); setRequestPrefillTitle(''); setRequestPrefillComposer(''); }}
         darkMode={darkMode}
         userEmail={currentUser?.email || ''}
         isVerified={currentUser?.emailVerified || currentUser?.email === 'solfasanctuary@gmail.com'}
         onSheetUploaded={(sheet) => setSheets(prev => [sheet, ...prev])}
+        prefillTitle={requestPrefillTitle}
+        prefillComposer={requestPrefillComposer}
+        fulfillingRequestId={fulfillRequest?.id}
+        onPreviewSheet={(id) => {
+          const s = sheets.find(x => x.id === id);
+          if (s) setActivePreview(s);
+        }}
+      />
+
+      <RequestModal
+        isOpen={isRequestModalOpen}
+        onClose={() => { setIsRequestModalOpen(false); setRequestPrefillTitle(''); setRequestPrefillComposer(''); }}
+        darkMode={darkMode}
+        currentUserId={currentUser?.id ?? null}
+        userDisplayName={currentUser?.displayName}
+        userEmail={currentUser?.email}
+        prefillTitle={requestPrefillTitle}
+        prefillComposer={requestPrefillComposer}
+        onRequestSubmitted={() => { /* requests auto-refresh on library tab */ }}
+        onViewSheet={(id) => {
+          const s = sheets.find(x => x.id === id);
+          if (s) { setActivePreview(s); setIsRequestModalOpen(false); }
+          else { setCurrentView('library'); setIsRequestModalOpen(false); }
+        }}
       />
 
       <AuthModal

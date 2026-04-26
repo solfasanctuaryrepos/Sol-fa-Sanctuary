@@ -1,7 +1,8 @@
-import { Search, List, Grid, Eye, Download, Music as MusicIcon, ArrowUp, ArrowDown, SearchX, Heart, MessageSquare } from 'lucide-react';
+import { Search, List, Grid, Eye, Download, Music as MusicIcon, ArrowUp, ArrowDown, SearchX, Heart, MessageSquare, BookOpen, Plus } from 'lucide-react';
 import React, { useState, useEffect, useRef, useMemo, memo } from 'react';
-import { MusicSheet } from '../types';
+import { MusicSheet, SheetRequest } from '../types';
 import { db } from '../supabase';
+import RequestCard from './RequestCard';
 
 interface MusicLibraryProps {
   darkMode: boolean;
@@ -13,7 +14,15 @@ interface MusicLibraryProps {
   onFavoritesChange?: (favs: string[]) => void;
   onAuthRequired?: () => void;
   onViewProfile?: (email: string) => void;
+  /** Open RequestModal pre-filled */
+  onRequestSheet?: (prefillTitle?: string) => void;
+  /** Open upload modal pre-filled for fulfilling a request */
+  onFulfillRequest?: (req: SheetRequest) => void;
+  /** Initial tab: 'sheets' | 'requests' */
+  initialTab?: 'sheets' | 'requests';
 }
+
+type LibTab = 'sheets' | 'requests';
 
 type SortConfig = { key: keyof MusicSheet; direction: 'asc' | 'desc' } | null;
 
@@ -188,7 +197,8 @@ const mapSheet = (s: Record<string, unknown>): MusicSheet => ({
   uploadedBy: s.uploaded_by as string,
 });
 
-const MusicLibrary: React.FC<MusicLibraryProps> = ({ darkMode, initialSearch = '', onPreview, sheets, currentUserId, userFavorites = [], onFavoritesChange, onAuthRequired, onViewProfile }) => {
+const MusicLibrary: React.FC<MusicLibraryProps> = ({ darkMode, initialSearch = '', onPreview, sheets, currentUserId, userFavorites = [], onFavoritesChange, onAuthRequired, onViewProfile, onRequestSheet, onFulfillRequest, initialTab = 'sheets' }) => {
+  const [libTab, setLibTab] = useState<LibTab>(initialTab);
   const [searchTerm, setSearchTerm] = useState(initialSearch);
   const [viewMode, setViewMode] = useState<'list' | 'grid'>('grid');
   const [sortConfig, setSortConfig] = useState<SortConfig>(null);
@@ -199,6 +209,49 @@ const MusicLibrary: React.FC<MusicLibraryProps> = ({ darkMode, initialSearch = '
   const [isSearching, setIsSearching] = useState(false);
   const [page, setPage] = useState(1);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // ── Requests tab state ──────────────────────────────────────────────────────
+  const [requests, setRequests] = useState<SheetRequest[]>([]);
+  const [requestsLoading, setRequestsLoading] = useState(false);
+  const [requestsSort, setRequestsSort] = useState<'votes' | 'newest'>('votes');
+
+  const fetchRequests = async () => {
+    setRequestsLoading(true);
+    try {
+      const { data } = await db
+        .from('sheet_requests')
+        .select('*')
+        .in('status', ['open', 'in_progress'])
+        .order(requestsSort === 'votes' ? 'votes_count' : 'created_at', { ascending: false })
+        .limit(50);
+
+      let rows = (data ?? []) as SheetRequest[];
+
+      // Annotate voted_by_me & comment counts
+      if (currentUserId && rows.length > 0) {
+        const ids = rows.map(r => r.id);
+        const [votesRes, commentRes] = await Promise.all([
+          db.from('request_votes').select('request_id').eq('user_id', currentUserId).in('request_id', ids),
+          db.from('request_comments').select('request_id').in('request_id', ids),
+        ]);
+        const votedSet = new Set((votesRes.data ?? []).map((v: any) => v.request_id));
+        const commentCounts: Record<string, number> = {};
+        for (const c of (commentRes.data ?? [])) {
+          commentCounts[c.request_id] = (commentCounts[c.request_id] ?? 0) + 1;
+        }
+        rows = rows.map(r => ({ ...r, voted_by_me: votedSet.has(r.id), comments_count: commentCounts[r.id] ?? 0 }));
+      }
+
+      setRequests(rows);
+    } finally {
+      setRequestsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (libTab === 'requests') fetchRequests();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [libTab, requestsSort, currentUserId]);
 
   const handleToggleFavorite = async (sheet: MusicSheet) => {
     if (!currentUserId) { onAuthRequired?.(); return; }
@@ -344,22 +397,119 @@ const MusicLibrary: React.FC<MusicLibraryProps> = ({ darkMode, initialSearch = '
           <p className={textSecondary}>Browse and discover Tonic Solfa sheets.</p>
         </div>
         <div className="flex items-center gap-2">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={16} />
-            <input
-              type="text"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder="Search library..."
-              className={`border rounded-lg pl-10 pr-4 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-green-500 w-full md:w-64 ${darkMode ? 'bg-slate-900 border-slate-800 text-slate-200' : 'bg-white border-slate-200 text-slate-800'}`}
-            />
-          </div>
-          <div className={`flex border rounded-lg overflow-hidden shrink-0 ${darkMode ? 'border-slate-800' : 'border-slate-200'}`}>
-            <button onClick={() => setViewMode('list')} className={`p-2 transition-colors ${viewMode === 'list' ? (darkMode ? 'bg-slate-800 text-slate-100' : 'bg-slate-100 text-slate-900') : (darkMode ? 'bg-slate-900 text-slate-400 hover:text-slate-100' : 'bg-white text-slate-400 hover:text-slate-900')}`}><List size={16} /></button>
-            <button onClick={() => setViewMode('grid')} className={`p-2 transition-colors ${viewMode === 'grid' ? (darkMode ? 'bg-slate-800 text-slate-100' : 'bg-slate-100 text-slate-900') : (darkMode ? 'bg-slate-900 text-slate-400 hover:text-slate-100' : 'bg-white text-slate-400 hover:text-slate-900')}`}><Grid size={16} /></button>
-          </div>
+          {libTab === 'sheets' && (
+            <>
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={16} />
+                <input
+                  type="text"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  placeholder="Search library..."
+                  className={`border rounded-lg pl-10 pr-4 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-green-500 w-full md:w-64 ${darkMode ? 'bg-slate-900 border-slate-800 text-slate-200' : 'bg-white border-slate-200 text-slate-800'}`}
+                />
+              </div>
+              <div className={`flex border rounded-lg overflow-hidden shrink-0 ${darkMode ? 'border-slate-800' : 'border-slate-200'}`}>
+                <button onClick={() => setViewMode('list')} className={`p-2 transition-colors ${viewMode === 'list' ? (darkMode ? 'bg-slate-800 text-slate-100' : 'bg-slate-100 text-slate-900') : (darkMode ? 'bg-slate-900 text-slate-400 hover:text-slate-100' : 'bg-white text-slate-400 hover:text-slate-900')}`}><List size={16} /></button>
+                <button onClick={() => setViewMode('grid')} className={`p-2 transition-colors ${viewMode === 'grid' ? (darkMode ? 'bg-slate-800 text-slate-100' : 'bg-slate-100 text-slate-900') : (darkMode ? 'bg-slate-900 text-slate-400 hover:text-slate-100' : 'bg-white text-slate-400 hover:text-slate-900')}`}><Grid size={16} /></button>
+              </div>
+            </>
+          )}
+          {libTab === 'requests' && (
+            <button
+              onClick={() => onRequestSheet?.()}
+              className="flex items-center gap-2 px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white text-sm font-bold rounded-xl transition-all shadow-lg active:scale-95"
+            >
+              <Plus size={15} /> New Request
+            </button>
+          )}
         </div>
       </div>
+
+      {/* Lib tab switcher */}
+      <div className={`flex w-fit rounded-xl overflow-hidden border transition-colors p-1 ${darkMode ? 'bg-slate-900/50 border-slate-800' : 'bg-slate-100 border-slate-200'}`}>
+        <button
+          onClick={() => setLibTab('sheets')}
+          className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-all flex items-center gap-2 ${libTab === 'sheets' ? (darkMode ? 'bg-slate-800 text-slate-100 shadow-lg' : 'bg-white text-slate-900 shadow-sm') : (darkMode ? 'text-slate-500 hover:text-slate-300' : 'text-slate-600 hover:text-slate-800')}`}
+        >
+          <MusicIcon size={14} /> Sheets
+        </button>
+        <button
+          onClick={() => setLibTab('requests')}
+          className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-all flex items-center gap-2 ${libTab === 'requests' ? (darkMode ? 'bg-slate-800 text-slate-100 shadow-lg' : 'bg-white text-slate-900 shadow-sm') : (darkMode ? 'text-slate-500 hover:text-slate-300' : 'text-slate-600 hover:text-slate-800')}`}
+        >
+          <BookOpen size={14} /> Requests
+        </button>
+      </div>
+
+      {/* ── REQUESTS TAB ─────────────────────────────────────────────────────── */}
+      {libTab === 'requests' && (
+        <div className="space-y-6">
+          {/* Sort pills */}
+          <div className="flex items-center gap-3">
+            {(['votes', 'newest'] as const).map(s => (
+              <button
+                key={s}
+                onClick={() => setRequestsSort(s)}
+                className={`px-3 py-1.5 rounded-full text-xs font-bold border transition-colors capitalize ${
+                  requestsSort === s
+                    ? 'bg-amber-500 text-white border-amber-500'
+                    : darkMode
+                      ? 'border-slate-700 text-slate-400 hover:border-slate-500 hover:text-slate-200'
+                      : 'border-slate-200 text-slate-600 hover:border-slate-400'
+                }`}
+              >
+                {s === 'votes' ? 'Most Voted' : 'Newest'}
+              </button>
+            ))}
+          </div>
+
+          {requestsLoading ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {[...Array(6)].map((_, i) => (
+                <div key={i} className={`rounded-2xl border h-36 animate-pulse ${darkMode ? 'bg-slate-900 border-slate-800' : 'bg-slate-100 border-slate-200'}`} />
+              ))}
+            </div>
+          ) : requests.length === 0 ? (
+            <div className="py-20 flex flex-col items-center gap-4 text-slate-500">
+              <BookOpen size={48} className="opacity-30" />
+              <p className="text-base">No open requests yet.</p>
+              <button
+                onClick={() => onRequestSheet?.()}
+                className="px-5 py-2 bg-amber-500 hover:bg-amber-600 text-white text-sm font-bold rounded-xl transition-all"
+              >
+                Be the first to request a sheet
+              </button>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {requests.map(req => (
+                <RequestCard
+                  key={req.id}
+                  request={req}
+                  darkMode={darkMode}
+                  currentUserId={currentUserId ?? null}
+                  onAuthRequired={onAuthRequired}
+                  onFulfill={onFulfillRequest}
+                  onVoteChange={(id, count, voted) => {
+                    setRequests(prev => prev.map(r => r.id === id ? { ...r, votes_count: count, voted_by_me: voted } : r));
+                  }}
+                />
+              ))}
+            </div>
+          )}
+
+          <p className={`text-xs text-center pt-2 ${darkMode ? 'text-slate-600' : 'text-slate-400'}`}>
+            Can't find what you're looking for?{' '}
+            <button onClick={() => onRequestSheet?.()} className="underline text-amber-500 hover:text-amber-600">
+              Submit a request
+            </button>
+          </p>
+        </div>
+      )}
+
+      {/* ── SHEETS TAB ───────────────────────────────────────────────────────── */}
+      {libTab === 'sheets' && (<>
 
       {/* Search status */}
       {(isSearching || filteredSheets.length > 0) && (
@@ -510,6 +660,14 @@ const MusicLibrary: React.FC<MusicLibraryProps> = ({ darkMode, initialSearch = '
           </p>
         </div>
       )}
+
+      <p className={`text-xs text-center pt-2 ${darkMode ? 'text-slate-600' : 'text-slate-400'}`}>
+        Can't find what you need?{' '}
+        <button onClick={() => setLibTab('requests')} className="underline text-amber-500 hover:text-amber-600">
+          Browse or submit requests
+        </button>
+      </p>
+      </>)} {/* end libTab === 'sheets' */}
     </div>
   );
 };
