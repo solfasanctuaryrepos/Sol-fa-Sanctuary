@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://solfasanctuary.com/sitemap.xml
