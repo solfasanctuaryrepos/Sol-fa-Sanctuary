@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { Upload, Search, Shield, Share2, ArrowRight, Eye, Download, LogIn, Music, Heart, MessageSquare, BookOpen, ThumbsUp } from 'lucide-react';
+import { Upload, Search, Shield, Share2, ArrowRight, Eye, Download, LogIn, Music, Heart, MessageSquare, BookOpen, ThumbsUp, Star, WifiOff, Layers } from 'lucide-react';
 import { MusicSheet, SheetRequest } from '../types';
 import { db } from '../supabase';
 
@@ -133,17 +133,56 @@ const LandingPage: React.FC<LandingPageProps> = ({ onUploadClick, onBrowseClick,
           <h2 className={`text-4xl font-serif font-bold ${textPrimaryClass}`}>Why You'll Love Sol-fa Sanctuary</h2>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
           {[
-            { title: 'Seamless Uploads', desc: 'Easily upload your music sheets. We handle PDF storage on Supabase Storage.', icon: Upload },
-            { title: 'Powerful Search', desc: 'Quickly find the music you need in our extensive public library with real-time filtering.', icon: Search },
-            { title: 'Manage & Share', desc: 'Keep your music organized in your personal dashboard and share it with the world.', icon: Share2 }
+            {
+              title: 'Upload & Publish',
+              desc: 'Share your scores with the world in seconds. Upload PDFs, set privacy, and reach musicians globally.',
+              icon: Upload,
+              accent: 'text-green-500',
+              bg: darkMode ? 'bg-green-500/10' : 'bg-green-50',
+            },
+            {
+              title: 'Full PDF Preview',
+              desc: 'Crisp, paginated sheet music viewer right in your browser — no downloads needed to sight-read.',
+              icon: Eye,
+              accent: 'text-blue-500',
+              bg: darkMode ? 'bg-blue-500/10' : 'bg-blue-50',
+            },
+            {
+              title: 'Smart Search',
+              desc: 'Find any piece instantly by title, composer, or instrument with typo-tolerant fuzzy matching.',
+              icon: Search,
+              accent: 'text-purple-500',
+              bg: darkMode ? 'bg-purple-500/10' : 'bg-purple-50',
+            },
+            {
+              title: 'Community Requests',
+              desc: 'Can\'t find a score? Submit a request and vote on what the community should upload next.',
+              icon: BookOpen,
+              accent: 'text-amber-500',
+              bg: darkMode ? 'bg-amber-500/10' : 'bg-amber-50',
+            },
+            {
+              title: 'Collections & Favourites',
+              desc: 'Save and organise sheets into personal or shared collections — your digital music cabinet.',
+              icon: Layers,
+              accent: 'text-rose-500',
+              bg: darkMode ? 'bg-rose-500/10' : 'bg-rose-50',
+            },
+            {
+              title: 'Offline Viewing',
+              desc: 'Save any sheet to your device and open it anywhere — even with no internet connection.',
+              icon: WifiOff,
+              accent: 'text-teal-500',
+              bg: darkMode ? 'bg-teal-500/10' : 'bg-teal-50',
+            },
           ].map((feature, i) => (
-            <div key={i} className={`p-8 rounded-3xl border hover:border-green-500 transition-all text-center space-y-6 group ${bgCardClass}`}>
-              <div className={`w-16 h-16 rounded-2xl flex items-center justify-center mx-auto text-green-500 group-hover:scale-110 transition-transform ${darkMode ? 'bg-slate-950 border-slate-800' : 'bg-slate-50 border-slate-200'}`}>
-                <feature.icon size={28} />
+            <div key={i} className={`p-7 rounded-3xl border hover:border-green-500/60 transition-all space-y-5 group ${bgCardClass}`}>
+              <div className={`w-14 h-14 rounded-2xl flex items-center justify-center ${feature.accent} ${feature.bg} group-hover:scale-110 transition-transform`}>
+                <feature.icon size={26} />
               </div>
-              <h3 className={`text-xl font-bold ${textPrimaryClass}`}>{feature.title}</h3>
+              <h3 className={`text-lg font-bold ${textPrimaryClass}`}>{feature.title}</h3>
               <p className={`leading-relaxed text-sm ${textSecondaryClass}`}>{feature.desc}</p>
             </div>
           ))}
