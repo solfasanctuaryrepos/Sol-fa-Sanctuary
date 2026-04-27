@@ -21,6 +21,8 @@ import { View, MusicSheet, SheetRequest } from './types';
 import { supabase, auth, db } from './supabase';
 import { useTheme } from './contexts/ThemeContext';
 import { useOfflineSheets } from './hooks/useOfflineSheets';
+import { useInstallPrompt } from './hooks/useInstallPrompt';
+import InstallBanner from './components/InstallBanner';
 
 interface SupabaseUser {
   id: string;
@@ -71,6 +73,7 @@ const App: React.FC = () => {
   const [fulfillRequest, setFulfillRequest] = useState<SheetRequest | null>(null);
   const [isOnline, setIsOnline] = useState(() => navigator.onLine);
   const offlineSheets = useOfflineSheets();
+  const installPrompt = useInstallPrompt();
 
   // Track online/offline status
   useEffect(() => {
@@ -573,6 +576,8 @@ const App: React.FC = () => {
             onThemeToggle={toggleTheme}
             onShowShortcuts={() => { setShowShortcuts(true); }}
             onDonate={() => setIsDonateModalOpen(true)}
+            canInstall={installPrompt.canInstall}
+            onInstall={installPrompt.triggerInstall}
           />
           
           <main className="max-w-7xl mx-auto px-4 pt-3 pb-12 lg:py-12 pb-24">
@@ -695,6 +700,15 @@ const App: React.FC = () => {
         <ShortcutsOverlay
           darkMode={darkMode}
           onClose={handleCloseShortcuts}
+        />
+      )}
+
+      {/* PWA install banner — shown after engagement thresholds are met */}
+      {installPrompt.showBanner && (
+        <InstallBanner
+          darkMode={darkMode}
+          onInstall={installPrompt.triggerInstall}
+          onDismiss={installPrompt.dismissBanner}
         />
       )}
     </div>

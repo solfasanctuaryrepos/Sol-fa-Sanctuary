@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Home, Music, LayoutDashboard, ShieldAlert, Moon, Sun, LogOut, LogIn, Info, HelpCircle, Heart } from 'lucide-react';
+import { Home, Music, LayoutDashboard, ShieldAlert, Moon, Sun, LogOut, LogIn, Info, HelpCircle, Heart, Download } from 'lucide-react';
 import { View } from '../types';
 
 interface NavbarProps {
@@ -13,9 +13,12 @@ interface NavbarProps {
   onThemeToggle: () => void;
   onShowShortcuts?: () => void;
   onDonate?: () => void;
+  /** True when the browser has offered an install prompt — shows the Install item */
+  canInstall?: boolean;
+  onInstall?: () => void;
 }
 
-const Navbar: React.FC<NavbarProps> = ({ activeView, onViewChange, currentUser, onLogout, onLogin, darkMode, onThemeToggle, onShowShortcuts, onDonate }) => {
+const Navbar: React.FC<NavbarProps> = ({ activeView, onViewChange, currentUser, onLogout, onLogin, darkMode, onThemeToggle, onShowShortcuts, onDonate, canInstall, onInstall }) => {
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -123,8 +126,20 @@ const Navbar: React.FC<NavbarProps> = ({ activeView, onViewChange, currentUser, 
                       Admin
                     </button>
                   )}
+                  {canInstall && onInstall && (
+                    <>
+                      <div className={`h-px my-1 ${darkMode ? 'bg-slate-800' : 'bg-slate-100'}`}></div>
+                      <button
+                        onClick={() => { onInstall(); setShowProfileMenu(false); }}
+                        className={`w-full flex items-center gap-3 px-4 py-2 text-sm font-medium text-green-500 transition-colors ${darkMode ? 'hover:bg-slate-800' : 'hover:bg-green-50'}`}
+                      >
+                        <Download size={16} />
+                        Install app
+                      </button>
+                    </>
+                  )}
                   <div className={`h-px my-1 ${darkMode ? 'bg-slate-800' : 'bg-slate-100'}`}></div>
-                  <button 
+                  <button
                     onClick={() => { onLogout(); setShowProfileMenu(false); }}
                     className={`w-full flex items-center gap-3 px-4 py-2 text-sm text-red-500 transition-colors ${darkMode ? 'hover:bg-slate-800' : 'hover:bg-red-50'}`}
                   >
