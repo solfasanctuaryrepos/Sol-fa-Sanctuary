@@ -3,6 +3,7 @@ import { Download, Share2, Eye, Calendar, User, FileText, Music as MusicIcon, X,
 import { MusicSheet, Comment, Collection } from '../types';
 import { db } from '../supabase';
 import { getPdfUrl } from '../utils/signedUrl';
+import OfflineSaveButton from './OfflineSaveButton';
 
 interface FullPreviewPageProps {
   sheet: MusicSheet | null;
@@ -20,6 +21,12 @@ interface FullPreviewPageProps {
   sheets?: MusicSheet[];
   onPreview?: (sheet: MusicSheet) => void;
   onNavigateCollections?: () => void;
+  /** Offline viewing props */
+  isAvailableOffline?: boolean;
+  isSavingOffline?: boolean;
+  offlineSaveProgress?: number;
+  onSaveOffline?: () => void;
+  onRemoveOffline?: () => void;
 }
 
 // ─── Module-level render queue ────────────────────────────────────────────────
@@ -841,6 +848,11 @@ const FullPreviewPage: React.FC<FullPreviewPageProps> = ({
   sheets = [],
   onPreview,
   onNavigateCollections,
+  isAvailableOffline = false,
+  isSavingOffline = false,
+  offlineSaveProgress = 0,
+  onSaveOffline,
+  onRemoveOffline,
 }) => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [pdfDoc, setPdfDoc] = useState<any>(null);
@@ -1196,6 +1208,22 @@ const FullPreviewPage: React.FC<FullPreviewPageProps> = ({
             {isMobileMenuOpen ? <ChevronUp size={22} /> : <Menu size={22} />}
           </button>
 
+          {/* Offline save — desktop only (in mobile it goes in the drawer) */}
+          {onSaveOffline && (
+            <div className="hidden md:block shrink-0">
+              <OfflineSaveButton
+                isSaved={isAvailableOffline}
+                isSaving={isSavingOffline}
+                isRemoving={false}
+                progress={offlineSaveProgress}
+                onSave={onSaveOffline}
+                onRemove={onRemoveOffline ?? (() => {})}
+                darkMode={darkMode}
+                variant="full"
+              />
+            </div>
+          )}
+
           {/* Download — always visible */}
           <button onClick={handleDownload} aria-label="Download PDF"
             className="shrink-0 px-3 md:px-5 py-2 bg-green-500 hover:bg-green-600 text-slate-950 font-bold rounded-xl transition-all shadow-lg shadow-green-500/10 flex items-center gap-1.5 active:scale-95 text-xs md:text-sm whitespace-nowrap">
@@ -1230,6 +1258,20 @@ const FullPreviewPage: React.FC<FullPreviewPageProps> = ({
                 <Heart size={18} className={isFavorited ? 'fill-current' : ''} />
                 <span className="text-xs font-semibold">{localLikesCount}</span>
               </button>
+              {/* Offline save in mobile drawer */}
+              {onSaveOffline && (
+                <OfflineSaveButton
+                  isSaved={isAvailableOffline}
+                  isSaving={isSavingOffline}
+                  isRemoving={false}
+                  progress={offlineSaveProgress}
+                  onSave={onSaveOffline}
+                  onRemove={onRemoveOffline ?? (() => {})}
+                  darkMode={darkMode}
+                  variant="icon"
+                  className="flex-1 h-[42px] rounded-xl"
+                />
+              )}
               <div className="relative flex-1" ref={collectionDropRef}>
                 <button onClick={handleAddToCollection}
                   className={`w-full p-2.5 rounded-xl border flex justify-center transition-colors ${showCollectionDropdown ? (darkMode ? 'border-green-500/50 text-green-500 bg-green-500/10' : 'border-green-500/50 text-green-600 bg-green-500/10') : darkMode ? 'border-slate-800 text-slate-400 hover:text-white' : 'border-slate-200 text-slate-500 hover:text-slate-900'}`}>

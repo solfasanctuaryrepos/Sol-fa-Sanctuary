@@ -20,6 +20,7 @@ import { useKeyboardShortcuts, ShortcutsOverlay } from './components/KeyboardSho
 import { View, MusicSheet, SheetRequest } from './types';
 import { supabase, auth, db } from './supabase';
 import { useTheme } from './contexts/ThemeContext';
+import { useOfflineSheets } from './hooks/useOfflineSheets';
 
 interface SupabaseUser {
   id: string;
@@ -68,6 +69,20 @@ const App: React.FC = () => {
   const [requestPrefillTitle, setRequestPrefillTitle] = useState('');
   const [requestPrefillComposer, setRequestPrefillComposer] = useState('');
   const [fulfillRequest, setFulfillRequest] = useState<SheetRequest | null>(null);
+  const [isOnline, setIsOnline] = useState(() => navigator.onLine);
+  const offlineSheets = useOfflineSheets();
+
+  // Track online/offline status
+  useEffect(() => {
+    const goOnline  = () => setIsOnline(true);
+    const goOffline = () => setIsOnline(false);
+    window.addEventListener('online',  goOnline);
+    window.addEventListener('offline', goOffline);
+    return () => {
+      window.removeEventListener('online',  goOnline);
+      window.removeEventListener('offline', goOffline);
+    };
+  }, []);
   // Guards onAuthStateChange from firing before getSession() resolves.
   const authReadyRef = useRef(false);
   // Tracks the last sheet query key to skip redundant re-fetches.
@@ -425,6 +440,10 @@ const App: React.FC = () => {
             onFavoritesChange={setUserFavorites}
             onNavigateCollections={() => { setPreviousView(currentView); setPreviousPreview(null); setCurrentView('collections'); }}
             onRequestSheet={() => { setRequestPrefillTitle(''); setRequestPrefillComposer(''); setIsRequestModalOpen(true); }}
+            offlineMeta={offlineSheets.offlineMeta}
+            onSaveOffline={offlineSheets.saveForOffline}
+            onRemoveOffline={offlineSheets.removeFromOffline}
+            onPreviewOfflineSheet={(sheet) => { setActivePreview(sheet); }}
           />
         ) : null;
       case 'library':
@@ -440,6 +459,7 @@ const App: React.FC = () => {
             onAuthRequired={() => setIsAuthModalOpen(true)}
             onViewProfile={handleViewProfile}
             onRequestSheet={(t) => { setRequestPrefillTitle(t ?? ''); setRequestPrefillComposer(''); setIsRequestModalOpen(true); }}
+            offlineSheetIds={new Set(offlineSheets.offlineMeta.map(m => m.id))}
             onFulfillRequest={(req) => {
               setFulfillRequest(req);
               setRequestPrefillTitle(req.title);
@@ -511,6 +531,13 @@ const App: React.FC = () => {
   return (
     <div className={`min-h-screen overflow-x-hidden transition-colors duration-300 selection:bg-green-500/30 selection:text-green-200 font-sans ${themeClasses}`}>
       <UpdateBanner darkMode={darkMode} />
+      {/* Offline banner */}
+      {!isOnline && (
+        <div className="fixed top-0 inset-x-0 z-[200] flex items-center justify-center gap-2 bg-amber-500 text-white text-sm font-semibold py-2 px-4">
+          <span>📡</span> You're offline — only saved sheets are available.
+        </div>
+      )}
+
       {activePreview ? (
         <FullPreviewPage
           sheet={activePreview}
@@ -528,6 +555,11 @@ const App: React.FC = () => {
           sheets={sheets}
           onPreview={handlePreview}
           onNavigateCollections={() => { setPreviousView(currentView); setPreviousPreview(activePreview); setCurrentView('collections'); setActivePreview(null); }}
+          isAvailableOffline={offlineSheets.isAvailableOffline(activePreview?.id ?? '')}
+          isSavingOffline={offlineSheets.saving === activePreview?.id}
+          offlineSaveProgress={offlineSheets.progress}
+          onSaveOffline={() => activePreview && offlineSheets.saveForOffline(activePreview)}
+          onRemoveOffline={() => activePreview && offlineSheets.removeFromOffline(activePreview)}
         />
       ) : (
         <>

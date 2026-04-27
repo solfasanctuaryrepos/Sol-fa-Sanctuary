@@ -1,8 +1,9 @@
-// Sol-fa Sanctuary Service Worker v6.2
-// Strategy: App shell caching + SPA offline support + CDN fallback
+// Sol-fa Sanctuary Service Worker v7.0
+// Strategy: App shell caching + SPA offline support + CDN fallback + offline sheet PDFs
 
-const APP_SHELL_CACHE = 'solfa-app-shell-v6.2';
-const CDN_CACHE = 'solfa-cdn-v6.2';
+const APP_SHELL_CACHE    = 'solfa-app-shell-v7.0';
+const CDN_CACHE          = 'solfa-cdn-v7.0';
+const OFFLINE_SHEETS_CACHE = 'solfa-offline-sheets-v1'; // never versioned — user data
 
 // A guaranteed fallback Response so we never return undefined to the browser
 const offlineResponse = () => new Response('Offline — please check your connection.', {
@@ -26,7 +27,8 @@ self.addEventListener('activate', event => {
     caches.keys().then(names =>
       Promise.all(
         names
-          .filter(n => n !== APP_SHELL_CACHE && n !== CDN_CACHE)
+          // Keep offline-sheets cache across SW versions — it holds user data
+          .filter(n => n !== APP_SHELL_CACHE && n !== CDN_CACHE && n !== OFFLINE_SHEETS_CACHE)
           .map(n => caches.delete(n))
       )
     ).then(() => self.clients.claim())
@@ -40,7 +42,30 @@ self.addEventListener('fetch', event => {
   // Never intercept non-GET
   if (request.method !== 'GET') return;
 
-  // Never intercept Supabase API calls (cloud, self-hosted, or custom domain)
+  // ── Offline sheets: check user-saved cache FIRST for Supabase storage URLs ──
+  // This runs before the "never intercept Supabase" bail-out so saved PDFs
+  // and thumbnails are served from cache even without a network connection.
+  const isSupabaseStorage = (
+    url.hostname === 'api.solfasanctuary.com' &&
+    (url.pathname.startsWith('/storage/') || url.pathname.startsWith('/object/'))
+  ) || (
+    url.hostname.includes('supabasekong') &&
+    (url.pathname.startsWith('/storage/') || url.pathname.startsWith('/object/'))
+  );
+
+  if (isSupabaseStorage) {
+    event.respondWith(
+      caches.open(OFFLINE_SHEETS_CACHE).then(async cache => {
+        const cached = await cache.match(request);
+        if (cached) return cached;
+        // Not saved offline — try network normally
+        return fetch(request).catch(() => offlineResponse());
+      })
+    );
+    return;
+  }
+
+  // Never intercept other Supabase API calls (auth, realtime, DB queries)
   if (
     url.hostname.includes('supabase.co') ||
     url.hostname.includes('supabasekong') ||
@@ -64,12 +89,10 @@ self.addEventListener('fetch', event => {
     event.respondWith(
       caches.open(APP_SHELL_CACHE).then(async cache => {
         const cached = await cache.match(request);
-        // Always attempt a network update in the background
         const networkPromise = fetch(request).then(response => {
           if (response.ok) cache.put(request, response.clone());
           return response;
-        }).catch(() => null); // null = network failed, handled below
-        // Return cache immediately if available, otherwise wait for network
+        }).catch(() => null);
         if (cached) return cached;
         return networkPromise.then(res => res || offlineResponse());
       })
