@@ -20,6 +20,8 @@ interface MusicLibraryProps {
   onFulfillRequest?: (req: SheetRequest) => void;
   /** Initial tab: 'sheets' | 'requests' */
   initialTab?: 'sheets' | 'requests';
+  /** Set of sheet IDs available offline */
+  offlineSheetIds?: Set<string>;
 }
 
 type LibTab = 'sheets' | 'requests';
@@ -36,7 +38,7 @@ function isNewThisWeek(uploadedAt: string): boolean {
 }
 
 // Extracted for performance optimization with memoization
-const SheetCard = memo(({ sheet, onPreview, activeMobileMenuId, setActiveMobileMenuId, darkMode, isFavorited, onToggleFavorite }: {
+const SheetCard = memo(({ sheet, onPreview, activeMobileMenuId, setActiveMobileMenuId, darkMode, isFavorited, onToggleFavorite, isOffline }: {
   sheet: MusicSheet;
   onPreview: (s: MusicSheet) => void;
   activeMobileMenuId: string | null;
@@ -44,6 +46,7 @@ const SheetCard = memo(({ sheet, onPreview, activeMobileMenuId, setActiveMobileM
   darkMode: boolean;
   isFavorited: boolean;
   onToggleFavorite: (sheet: MusicSheet) => void;
+  isOffline?: boolean;
 }) => {
   const tableBg = darkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200 shadow-sm';
   const textPrimary = darkMode ? 'text-slate-100' : 'text-slate-900';
@@ -113,6 +116,15 @@ const SheetCard = memo(({ sheet, onPreview, activeMobileMenuId, setActiveMobileM
         {isNew && (
           <div className="absolute top-2 left-2 pointer-events-none z-10">
             <span className="bg-green-500 text-white text-[9px] font-bold uppercase px-1.5 py-0.5 rounded">NEW</span>
+          </div>
+        )}
+
+        {/* Offline available badge */}
+        {isOffline && (
+          <div className="absolute bottom-2 left-2 pointer-events-none z-10">
+            <span className="flex items-center gap-1 bg-green-500/90 backdrop-blur-sm text-white text-[9px] font-bold uppercase px-1.5 py-0.5 rounded">
+              📶 Offline
+            </span>
           </div>
         )}
 
@@ -197,7 +209,7 @@ const mapSheet = (s: Record<string, unknown>): MusicSheet => ({
   uploadedBy: s.uploaded_by as string,
 });
 
-const MusicLibrary: React.FC<MusicLibraryProps> = ({ darkMode, initialSearch = '', onPreview, sheets, currentUserId, userFavorites = [], onFavoritesChange, onAuthRequired, onViewProfile, onRequestSheet, onFulfillRequest, initialTab = 'sheets' }) => {
+const MusicLibrary: React.FC<MusicLibraryProps> = ({ darkMode, initialSearch = '', onPreview, sheets, currentUserId, userFavorites = [], onFavoritesChange, onAuthRequired, onViewProfile, onRequestSheet, onFulfillRequest, initialTab = 'sheets', offlineSheetIds = new Set() }) => {
   const [libTab, setLibTab] = useState<LibTab>(initialTab);
   const [searchTerm, setSearchTerm] = useState(initialSearch);
   const [viewMode, setViewMode] = useState<'list' | 'grid'>('grid');
@@ -576,6 +588,7 @@ const MusicLibrary: React.FC<MusicLibraryProps> = ({ darkMode, initialSearch = '
               darkMode={darkMode}
               isFavorited={userFavorites.includes(sheet.id)}
               onToggleFavorite={handleToggleFavorite}
+              isOffline={offlineSheetIds.has(sheet.id)}
             />
           ))}
         </div>

@@ -1,8 +1,10 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { Upload, Music, Eye, Download, Search, List, Grid, MoreVertical, Edit2, Trash2, FileText, ArrowUp, ArrowDown, X, Check, Lock, ShieldAlert, Globe, AlertTriangle, Heart, BarChart2, RefreshCw, BookOpen, MessageSquare, ThumbsUp, Clock, CheckCircle2 } from 'lucide-react';
+import { Upload, Music, Eye, Download, Search, List, Grid, MoreVertical, Edit2, Trash2, FileText, ArrowUp, ArrowDown, X, Check, Lock, ShieldAlert, Globe, AlertTriangle, Heart, BarChart2, RefreshCw, BookOpen, MessageSquare, ThumbsUp, Clock, CheckCircle2, WifiOff, CloudOff } from 'lucide-react';
 import { MusicSheet, SheetRequest } from '../types';
 import { db, storage } from '../supabase';
+import { OfflineSheetMeta } from '../hooks/useOfflineSheets';
+import OfflineSaveButton from './OfflineSaveButton';
 import Modal from './Modal';
 
 interface DashboardProps {
@@ -20,10 +22,14 @@ interface DashboardProps {
   onFavoritesChange?: (favs: string[]) => void;
   onNavigateCollections?: () => void;
   onRequestSheet?: () => void;
+  offlineMeta?: OfflineSheetMeta[];
+  onSaveOffline?: (sheet: MusicSheet) => Promise<void>;
+  onRemoveOffline?: (sheet: MusicSheet) => Promise<void>;
+  onPreviewOfflineSheet?: (sheet: MusicSheet) => void;
 }
 
 type SortConfig = { key: keyof MusicSheet; direction: 'asc' | 'desc' } | null;
-type DashTab = 'mine' | 'favourites' | 'requests';
+type DashTab = 'mine' | 'favourites' | 'requests' | 'offline';
 
 // ── Analytics panel ───────────────────────────────────────────────────────────
 interface DayData { views: number; downloads: number; label: string; }
@@ -128,7 +134,7 @@ const AnalyticsPanel: React.FC<{ sheet: MusicSheet; darkMode: boolean; onClose: 
 };
 // ─────────────────────────────────────────────────────────────────────────────
 
-const Dashboard: React.FC<DashboardProps> = ({ onUploadClick, onPreview, darkMode, sheets, userEmail, userId, onSheetDeleted, onSheetUpdated, userFavorites = [], onFavoritesChange, onNavigateCollections, onRequestSheet }) => {
+const Dashboard: React.FC<DashboardProps> = ({ onUploadClick, onPreview, darkMode, sheets, userEmail, userId, onSheetDeleted, onSheetUpdated, userFavorites = [], onFavoritesChange, onNavigateCollections, onRequestSheet, offlineMeta = [], onSaveOffline, onRemoveOffline, onPreviewOfflineSheet }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [viewMode, setViewMode] = useState<'list' | 'grid'>('grid');
   const [sortConfig, setSortConfig] = useState<SortConfig>(null);
@@ -394,6 +400,12 @@ const Dashboard: React.FC<DashboardProps> = ({ onUploadClick, onPreview, darkMod
         >
           <BookOpen size={15} /> My Requests
         </button>
+        <button
+          onClick={() => setActiveTab('offline')}
+          className={`px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-2 ${activeTab === 'offline' ? (darkMode ? 'bg-slate-800 text-slate-100 shadow-lg' : 'bg-white text-slate-900 shadow-sm') : (darkMode ? 'text-slate-500 hover:text-slate-300' : 'text-slate-600 hover:text-slate-800')}`}
+        >
+          <WifiOff size={15} /> Offline <span className="text-[10px] font-bold ml-0.5">({offlineMeta.length})</span>
+        </button>
       </div>
 
       {/* Favourites tab */}
@@ -492,6 +504,131 @@ const Dashboard: React.FC<DashboardProps> = ({ onUploadClick, onPreview, darkMod
                       <span className={`flex items-center gap-1 text-sm font-semibold ${darkMode ? 'text-amber-400' : 'text-amber-600'}`}>
                         <ThumbsUp size={13} /> {req.votes_count}
                       </span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Offline tab */}
+      {activeTab === 'offline' && (
+        <div className="space-y-4">
+          {/* Header row */}
+          <div className="flex items-center justify-between">
+            <div>
+              <p className={`text-sm ${textSecondary}`}>
+                Sheets cached on this device for viewing without internet.
+              </p>
+              {offlineMeta.length > 0 && (
+                <p className={`text-xs mt-0.5 ${darkMode ? 'text-slate-500' : 'text-slate-400'}`}>
+                  {offlineMeta.length} sheet{offlineMeta.length !== 1 ? 's' : ''} · {(() => {
+                    const totalBytes = offlineMeta.reduce((acc, m) => acc + (m.sizeBytes ?? 0), 0);
+                    if (totalBytes === 0) return '—';
+                    if (totalBytes < 1024 * 1024) return `${Math.round(totalBytes / 1024)} KB`;
+                    return `${(totalBytes / (1024 * 1024)).toFixed(1)} MB`;
+                  })()} used
+                </p>
+              )}
+            </div>
+          </div>
+
+          {offlineMeta.length === 0 ? (
+            /* Empty state */
+            <div className={`py-16 text-center border-2 border-dashed rounded-2xl ${darkMode ? 'border-slate-800 text-slate-500' : 'border-slate-200 text-slate-400'}`}>
+              <WifiOff size={40} className="mx-auto mb-3 opacity-20" />
+              <p className="font-medium">No offline sheets yet</p>
+              <p className="text-xs mt-1 max-w-xs mx-auto">
+                Open any sheet and tap <strong>Save offline</strong> to make it available without internet.
+              </p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {offlineMeta.map(meta => {
+                /* Build a minimal MusicSheet so the shared handlers work */
+                const asSheet: MusicSheet = {
+                  id: meta.id,
+                  title: meta.title,
+                  composer: meta.composer,
+                  thumbnailUrl: meta.thumbnailUrl,
+                  pdfUrl: meta.pdfUrl,
+                  type: '',
+                  uploadedAt: meta.savedAt,
+                  fileSize: '',
+                  views: 0,
+                  downloads: 0,
+                  commentsCount: 0,
+                  likesCount: 0,
+                  isPublic: true,
+                  isAdminRestricted: false,
+                  uploadedBy: '',
+                };
+                const sizeLabel = meta.sizeBytes
+                  ? meta.sizeBytes < 1024 * 1024
+                    ? `${Math.round(meta.sizeBytes / 1024)} KB`
+                    : `${(meta.sizeBytes / (1024 * 1024)).toFixed(1)} MB`
+                  : null;
+                const savedDate = new Date(meta.savedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+                const isCurrentlyRemoving = false; // parent handles optimistic state
+
+                return (
+                  <div
+                    key={meta.id}
+                    className={`flex flex-col rounded-2xl border overflow-hidden transition-shadow hover:shadow-md ${darkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200 shadow-sm'}`}
+                  >
+                    {/* Thumbnail */}
+                    <div
+                      className="relative aspect-[3/2] bg-slate-100 dark:bg-slate-800 cursor-pointer overflow-hidden"
+                      onClick={() => onPreviewOfflineSheet?.(asSheet)}
+                    >
+                      {meta.thumbnailUrl ? (
+                        <img
+                          src={meta.thumbnailUrl}
+                          alt={meta.title}
+                          className="w-full h-full object-cover"
+                          onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                        />
+                      ) : (
+                        <div className="flex items-center justify-center h-full">
+                          <FileText size={36} className={darkMode ? 'text-slate-700' : 'text-slate-300'} />
+                        </div>
+                      )}
+                      {/* Offline badge */}
+                      <div className="absolute bottom-2 left-2 flex items-center gap-1 px-2 py-0.5 rounded-full bg-green-500 text-white text-[10px] font-bold">
+                        <WifiOff size={9} /> Offline
+                      </div>
+                    </div>
+
+                    {/* Info */}
+                    <div className="flex flex-col flex-1 p-3 gap-2">
+                      <div className="flex-1 min-w-0">
+                        <p className={`font-semibold text-sm leading-tight truncate ${textPrimary}`}>{meta.title}</p>
+                        {meta.composer && (
+                          <p className={`text-xs truncate mt-0.5 ${textSecondary}`}>{meta.composer}</p>
+                        )}
+                        <div className={`flex items-center gap-2 mt-1 text-[10px] ${darkMode ? 'text-slate-500' : 'text-slate-400'}`}>
+                          <span><Clock size={9} className="inline mr-0.5" />{savedDate}</span>
+                          {sizeLabel && <span>· {sizeLabel}</span>}
+                        </div>
+                      </div>
+
+                      {/* Actions */}
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => onPreviewOfflineSheet?.(asSheet)}
+                          className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-xs font-semibold transition-all ${darkMode ? 'bg-slate-800 hover:bg-slate-700 text-slate-200' : 'bg-slate-100 hover:bg-slate-200 text-slate-700'}`}
+                        >
+                          <Eye size={12} /> View
+                        </button>
+                        <button
+                          onClick={() => onRemoveOffline?.(asSheet)}
+                          className={`flex items-center justify-center gap-1 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${darkMode ? 'bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20' : 'bg-red-50 hover:bg-red-100 text-red-600 border border-red-200'}`}
+                        >
+                          <CloudOff size={12} /> Remove
+                        </button>
+                      </div>
                     </div>
                   </div>
                 );
