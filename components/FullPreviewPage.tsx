@@ -898,6 +898,11 @@ const FullPreviewPage: React.FC<FullPreviewPageProps> = ({
     return () => document.removeEventListener('mousedown', handler);
   }, []);
 
+  // Blob URL created from the fetched PDF — revoked on sheet change / unmount.
+  const blobUrlRef = useRef<string | null>(null);
+  // Download progress (0–100) while fetching the PDF blob.
+  const [fetchProgress, setFetchProgress] = useState(0);
+
   useEffect(() => {
     if (!sheet) return;
 
@@ -905,40 +910,81 @@ const FullPreviewPage: React.FC<FullPreviewPageProps> = ({
     setNumPages(0);
     setIsInitialLoading(true);
     setPdfError(null);
+    setFetchProgress(0);
+
+    // Revoke any previous blob URL to free memory.
+    if (blobUrlRef.current) {
+      URL.revokeObjectURL(blobUrlRef.current);
+      blobUrlRef.current = null;
+    }
 
     let timeoutId: ReturnType<typeof setTimeout> | null = null;
     let cancelled = false;
 
     const loadPdf = async () => {
+      // Allow 60 s total — blob fetch + PDF.js parse for large scores.
       timeoutId = setTimeout(() => {
         if (!cancelled) {
           setPdfError('Failed to load PDF. Please try again.');
           setIsInitialLoading(false);
         }
-      }, 15000);
+      }, 60000);
 
       try {
-        // Resolve signed URL for private sheets
+        // 1. Resolve URL (rewrites legacy IPs; creates signed URL for private sheets).
         const pdfUrl = await getPdfUrl(sheet);
         if (cancelled) return;
-        setResolvedPdfUrl(pdfUrl);
+        setResolvedPdfUrl(pdfUrl); // keep original URL for the Download button
 
+        // 2. Fetch the whole PDF as a blob.
+        //    • Avoids HTTP range requests that Supabase storage can reject with 503.
+        //    • The service worker intercepts this fetch and serves from the offline
+        //      cache when the user is offline — preview works the same as online.
+        //    • PDF.js receives a local blob: URL so its worker has no CORS concerns.
+        const response = await fetch(pdfUrl, { mode: 'cors' });
+        if (!response.ok) throw new Error(`HTTP ${response.status} fetching PDF`);
+        if (cancelled) return;
+
+        // Track download progress when the server sends Content-Length.
+        const contentLength = Number(response.headers.get('content-length') ?? 0);
+        let received = 0;
+        let blob: Blob;
+
+        if (contentLength > 0 && response.body) {
+          const reader = response.body.getReader();
+          const chunks: Uint8Array[] = [];
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            if (cancelled) { reader.cancel(); return; }
+            chunks.push(value);
+            received += value.length;
+            setFetchProgress(Math.min(99, Math.round((received / contentLength) * 90)));
+          }
+          blob = new Blob(chunks, { type: 'application/pdf' });
+        } else {
+          // No Content-Length — just await the whole response.
+          blob = await response.blob();
+        }
+
+        if (cancelled) return;
+        setFetchProgress(99);
+
+        const blobUrl = URL.createObjectURL(blob);
+        blobUrlRef.current = blobUrl;
+
+        // 3. Hand PDF.js the local blob URL — no network traffic, no CORS, no range requests.
         const pdfjsLib = (window as any).pdfjsLib;
         if (!pdfjsLib) throw new Error('PDF.js not loaded');
 
         pdfjsLib.GlobalWorkerOptions.workerSrc =
           `https://cdn.jsdelivr.net/npm/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.js`;
 
-        const loadingTask = pdfjsLib.getDocument({
-          url: pdfUrl,
-          rangeChunkSize: 65536,
-          disableAutoFetch: false,
-          disableStream: false,
-        });
-
+        const loadingTask = pdfjsLib.getDocument({ url: blobUrl });
         const pdf = await loadingTask.promise;
         if (cancelled) return;
         if (timeoutId) clearTimeout(timeoutId);
+        setFetchProgress(100);
         setPdfDoc(pdf);
         setNumPages(pdf.numPages);
       } catch (error) {
@@ -955,6 +1001,10 @@ const FullPreviewPage: React.FC<FullPreviewPageProps> = ({
     return () => {
       cancelled = true;
       if (timeoutId) clearTimeout(timeoutId);
+      if (blobUrlRef.current) {
+        URL.revokeObjectURL(blobUrlRef.current);
+        blobUrlRef.current = null;
+      }
     };
   }, [sheet?.id, sheet?.pdfUrl, pdfLoadKey]);
 
@@ -1296,9 +1346,23 @@ const FullPreviewPage: React.FC<FullPreviewPageProps> = ({
         <div className="w-full max-w-[800px] animate-in fade-in zoom-in-95 duration-700">
           <div className={`w-full min-h-[400px] rounded-2xl border-2 md:border-4 overflow-hidden shadow-2xl transition-colors relative score-page-container ${darkMode ? 'border-slate-800 bg-slate-900' : 'border-white bg-white'}`}>
             {isInitialLoading ? (
-              <div className="absolute inset-0 flex flex-col items-center justify-center space-y-4 no-print">
+              <div className="absolute inset-0 flex flex-col items-center justify-center space-y-6 no-print px-8">
                 <Loader2 className="animate-spin text-green-500" size={48} />
-                <p className={`text-sm font-medium animate-pulse ${textSecondary}`}>Opening the score…</p>
+                {fetchProgress > 0 && fetchProgress < 100 ? (
+                  <div className="w-full max-w-xs space-y-2">
+                    <div className={`h-1.5 rounded-full overflow-hidden ${darkMode ? 'bg-slate-800' : 'bg-slate-200'}`}>
+                      <div
+                        className="h-full bg-green-500 rounded-full transition-all duration-300"
+                        style={{ width: `${fetchProgress}%` }}
+                      />
+                    </div>
+                    <p className={`text-xs text-center font-medium ${textSecondary}`}>
+                      {fetchProgress < 90 ? `Downloading… ${fetchProgress}%` : 'Rendering score…'}
+                    </p>
+                  </div>
+                ) : (
+                  <p className={`text-sm font-medium animate-pulse ${textSecondary}`}>Opening the score…</p>
+                )}
               </div>
             ) : pdfError ? (
               <div className="absolute inset-0 flex flex-col items-center justify-center space-y-4 no-print">
