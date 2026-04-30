@@ -91,25 +91,25 @@ const LandingPage: React.FC<LandingPageProps> = ({ onUploadClick, onBrowseClick,
           <p className={`text-xl leading-relaxed max-w-xl ${textSecondaryClass}`}>
             Discover, manage, and share Tonic Solfa music sheets with a vibrant community of musicians. Sol-fa Sanctuary is your dedicated platform for professional scores.
           </p>
-          <div className="flex flex-wrap gap-4">
-            <button 
+          <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+            <button
               onClick={onUploadClick}
-              className="px-8 h-[48px] bg-green-500 hover:bg-green-600 text-white font-bold rounded-xl transition-all shadow-xl shadow-green-500/20 flex items-center gap-2 active:scale-95"
+              className="shrink-0 px-8 h-[48px] bg-green-500 hover:bg-green-600 text-white font-bold rounded-xl transition-all shadow-xl shadow-green-500/20 flex items-center justify-center gap-2 active:scale-95"
             >
               {isLoggedIn ? <Upload size={20} /> : <LogIn size={20} />}
               {isLoggedIn ? 'Upload Music' : 'Get Started'}
             </button>
-            <form onSubmit={handleSearchSubmit} className="relative group flex-1 md:flex-none w-full md:min-w-[300px]">
-              <Search className={`absolute left-4 top-1/2 -translate-y-1/2 transition-colors ${darkMode ? 'text-slate-500 group-hover:text-green-500' : 'text-slate-400 group-hover:text-green-600'}`} size={20} />
-              <input 
-                type="text" 
+            <form onSubmit={handleSearchSubmit} className="relative group w-full sm:w-64 lg:w-72">
+              <Search className={`absolute left-3 top-1/2 -translate-y-1/2 transition-colors ${darkMode ? 'text-slate-500 group-hover:text-green-500' : 'text-slate-400 group-hover:text-green-600'}`} size={16} />
+              <input
+                type="text"
                 value={localSearch}
                 onChange={(e) => setLocalSearch(e.target.value)}
-                placeholder="Search for music..." 
-                className={`pl-12 pr-12 h-[48px] border rounded-xl focus:outline-none focus:border-green-500 w-full transition-all ${darkMode ? 'bg-slate-900 border-slate-800 text-slate-200' : 'bg-white border-slate-200 text-slate-800 shadow-sm'}`}
+                placeholder="Search sheets…"
+                className={`pl-9 pr-9 h-[48px] border rounded-xl focus:outline-none focus:border-green-500 w-full transition-all text-sm ${darkMode ? 'bg-slate-900 border-slate-800 text-slate-200' : 'bg-white border-slate-200 text-slate-800 shadow-sm'}`}
               />
-              <button type="submit" className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-green-500 transition-colors">
-                <ArrowRight size={18} />
+              <button type="submit" className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-green-500 transition-colors">
+                <ArrowRight size={16} />
               </button>
             </form>
           </div>
