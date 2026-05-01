@@ -22,6 +22,7 @@ import { useTheme } from './contexts/ThemeContext';
 import { useOfflineSheets } from './hooks/useOfflineSheets';
 import { useInstallPrompt } from './hooks/useInstallPrompt';
 import InstallBanner from './components/InstallBanner';
+import { EntitlementsProvider } from './contexts/EntitlementsContext';
 
 interface SupabaseUser {
   id: string;
@@ -554,6 +555,7 @@ const App: React.FC = () => {
     : "bg-slate-50 text-slate-900";
 
   return (
+    <EntitlementsProvider userId={currentUser?.id ?? null}>
     <div className={`min-h-screen overflow-x-hidden transition-colors duration-300 selection:bg-green-500/30 selection:text-green-200 font-sans ${themeClasses}`}>
       <UpdateBanner darkMode={darkMode} />
       {/* Offline banner */}
@@ -720,6 +722,7 @@ const App: React.FC = () => {
         />
       )}
     </div>
+    </EntitlementsProvider>
   );
 };
 
