@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Download, Share2, Eye, Calendar, User, FileText, Music as MusicIcon, X, ExternalLink, Menu, ChevronUp, Loader2, AlertTriangle, AlertCircle, Heart, FolderPlus, Trash2, MessageSquare, Send, CornerDownRight, ChevronDown, ChevronRight } from 'lucide-react';
+import { Download, Share2, Eye, Calendar, User, FileText, Music as MusicIcon, X, ExternalLink, Menu, ChevronUp, Loader2, AlertTriangle, AlertCircle, Heart, FolderPlus, Trash2, MessageSquare, Send, CornerDownRight, ChevronDown, ChevronRight, Lock, Zap } from 'lucide-react';
 import { MusicSheet, Comment, Collection } from '../types';
 import { db } from '../supabase';
 import { getPdfUrl } from '../utils/signedUrl';
 import OfflineSaveButton from './OfflineSaveButton';
+import { useEntitlementsContext } from '../contexts/EntitlementsContext';
 
 interface FullPreviewPageProps {
   sheet: MusicSheet | null;
@@ -27,6 +28,8 @@ interface FullPreviewPageProps {
   offlineSaveProgress?: number;
   onSaveOffline?: () => void;
   onRemoveOffline?: () => void;
+  /** Navigate to pricing page (for feature gates) */
+  onOpenPricing?: () => void;
 }
 
 // ─── Module-level render queue ────────────────────────────────────────────────
@@ -853,7 +856,9 @@ const FullPreviewPage: React.FC<FullPreviewPageProps> = ({
   offlineSaveProgress = 0,
   onSaveOffline,
   onRemoveOffline,
+  onOpenPricing,
 }) => {
+  const ent = useEntitlementsContext();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [pdfDoc, setPdfDoc] = useState<any>(null);
   const [numPages, setNumPages] = useState(0);
@@ -867,6 +872,9 @@ const FullPreviewPage: React.FC<FullPreviewPageProps> = ({
   const [localDownloads, setLocalDownloads] = useState(sheet?.downloads ?? 0);
   const [localLikesCount, setLocalLikesCount] = useState(sheet?.likesCount ?? 0);
   const [isFavorited, setIsFavorited] = useState(false);
+  // Download gate — monthly download count for free users
+  const [monthlyDownloads, setMonthlyDownloads] = useState<number | null>(null);
+  const [showDownloadGate, setShowDownloadGate] = useState(false);
   const [favLoading, setFavLoading] = useState(false);
   const [showCollectionDropdown, setShowCollectionDropdown] = useState(false);
   const [localCommentsCount, setLocalCommentsCount] = useState(sheet?.commentsCount ?? 0);
@@ -1072,6 +1080,19 @@ const FullPreviewPage: React.FC<FullPreviewPageProps> = ({
     }
   }, [sheet?.id]);
 
+  // ── Fetch monthly download count for free-tier gate ───────────────────────────
+  useEffect(() => {
+    if (!currentUserId || !ent.loaded || ent.canDownloadUnlimited || !ent.billingActive) return;
+    const startOfMonth = new Date();
+    startOfMonth.setDate(1); startOfMonth.setHours(0, 0, 0, 0);
+    db.from('interactions')
+      .select('id', { count: 'exact', head: true })
+      .eq('user_id', currentUserId)
+      .eq('type', 'downloads')
+      .gte('created_at', startOfMonth.toISOString())
+      .then(({ count }) => setMonthlyDownloads(count ?? 0));
+  }, [currentUserId, ent.loaded, ent.canDownloadUnlimited, ent.billingActive]);
+
   const toggleFavorite = async () => {
     if (!isLoggedIn) { onAuthRequired(); return; }
     if (!sheet || !currentUserId || favLoading) return;
@@ -1102,11 +1123,32 @@ const FullPreviewPage: React.FC<FullPreviewPageProps> = ({
     isLoggedIn ? action() : onAuthRequired();
   };
 
+  // Offline save with entitlement gate
+  const handleOfflineSave = () => {
+    if (!isLoggedIn) { onAuthRequired(); return; }
+    if (ent.billingActive && !ent.hasOfflineAccess) {
+      onOpenPricing?.();
+      return;
+    }
+    onSaveOffline?.();
+  };
+
   const handleOpenNewTab = () => handleProtectedAction(() => {
     window.open(`${window.location.origin}${window.location.pathname}?sheet=${sheet?.id}`, '_blank');
   });
 
   const handleDownload = () => handleProtectedAction(async () => {
+    // ── Download gate: free-tier monthly limit ─────────────────────────────────
+    if (ent.billingActive && !ent.canDownloadUnlimited) {
+      const count = monthlyDownloads ?? 0;
+      if (count >= ent.monthlyDownloadLimit) {
+        setShowDownloadGate(true);
+        return;
+      }
+      // Optimistically increment local count so double-clicking doesn't bypass
+      setMonthlyDownloads(n => (n ?? 0) + 1);
+    }
+
     trackInteraction('downloads');
     const base = resolvedPdfUrl || sheet?.pdfUrl || '';
     if (!base) return;
@@ -1266,7 +1308,7 @@ const FullPreviewPage: React.FC<FullPreviewPageProps> = ({
                 isSaving={isSavingOffline}
                 isRemoving={false}
                 progress={offlineSaveProgress}
-                onSave={onSaveOffline}
+                onSave={handleOfflineSave}
                 onRemove={onRemoveOffline ?? (() => {})}
                 darkMode={darkMode}
                 variant="full"
@@ -1274,11 +1316,18 @@ const FullPreviewPage: React.FC<FullPreviewPageProps> = ({
             </div>
           )}
 
-          {/* Download — always visible */}
-          <button onClick={handleDownload} aria-label="Download PDF"
-            className="shrink-0 px-3 md:px-5 py-2 bg-green-500 hover:bg-green-600 text-slate-950 font-bold rounded-xl transition-all shadow-lg shadow-green-500/10 flex items-center gap-1.5 active:scale-95 text-xs md:text-sm whitespace-nowrap">
-            <Download size={16} /><span className="hidden sm:inline">Download PDF</span><span className="sm:hidden">PDF</span>
-          </button>
+          {/* Download — gated for free users when billing active */}
+          {ent.billingActive && !ent.canDownloadUnlimited && (monthlyDownloads ?? 0) >= ent.monthlyDownloadLimit ? (
+            <button onClick={() => setShowDownloadGate(true)} aria-label="Download limit reached"
+              className="shrink-0 px-3 md:px-5 py-2 bg-amber-500/20 border border-amber-500/40 text-amber-500 font-bold rounded-xl flex items-center gap-1.5 text-xs md:text-sm whitespace-nowrap cursor-pointer">
+              <Lock size={15} /><span className="hidden sm:inline">Limit reached</span><span className="sm:hidden">Limit</span>
+            </button>
+          ) : (
+            <button onClick={handleDownload} aria-label="Download PDF"
+              className="shrink-0 px-3 md:px-5 py-2 bg-green-500 hover:bg-green-600 text-slate-950 font-bold rounded-xl transition-all shadow-lg shadow-green-500/10 flex items-center gap-1.5 active:scale-95 text-xs md:text-sm whitespace-nowrap">
+              <Download size={16} /><span className="hidden sm:inline">Download PDF</span><span className="sm:hidden">PDF</span>
+            </button>
+          )}
         </div>
 
         {/* ── Mobile drawer (below md) — metadata + actions ── */}
@@ -1315,7 +1364,7 @@ const FullPreviewPage: React.FC<FullPreviewPageProps> = ({
                   isSaving={isSavingOffline}
                   isRemoving={false}
                   progress={offlineSaveProgress}
-                  onSave={onSaveOffline}
+                  onSave={handleOfflineSave}
                   onRemove={onRemoveOffline ?? (() => {})}
                   darkMode={darkMode}
                   variant="icon"
@@ -1423,6 +1472,52 @@ const FullPreviewPage: React.FC<FullPreviewPageProps> = ({
           </div>
         </div>
       </main>
+
+      {/* ── Download gate modal ─────────────────────────────────────────────── */}
+      {showDownloadGate && (
+        <div className="fixed inset-0 z-[300] flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-sm" onClick={() => setShowDownloadGate(false)}>
+          <div
+            className={`relative rounded-2xl border p-6 max-w-sm w-full space-y-4 animate-in zoom-in-95 duration-200
+              ${darkMode ? 'bg-slate-900 border-slate-700' : 'bg-white border-slate-200 shadow-xl'}`}
+            onClick={e => e.stopPropagation()}
+          >
+            <button onClick={() => setShowDownloadGate(false)} className={`absolute top-3 right-3 p-1.5 rounded-lg ${darkMode ? 'hover:bg-slate-800 text-slate-500' : 'hover:bg-slate-100 text-slate-400'}`}>
+              <X size={16} />
+            </button>
+
+            <div className="flex items-center gap-3">
+              <div className="p-3 rounded-xl bg-amber-500/10">
+                <Lock size={22} className="text-amber-500" />
+              </div>
+              <div>
+                <h3 className={`font-bold ${darkMode ? 'text-slate-100' : 'text-slate-900'}`}>Monthly limit reached</h3>
+                <p className={`text-xs mt-0.5 ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>
+                  Free plan · {ent.monthlyDownloadLimit} downloads/month
+                </p>
+              </div>
+            </div>
+
+            <p className={`text-sm ${darkMode ? 'text-slate-400' : 'text-slate-600'}`}>
+              You've used all {ent.monthlyDownloadLimit} downloads this month. Upgrade to Maestro for unlimited downloads and offline access.
+            </p>
+
+            <div className="flex gap-2 pt-1">
+              <button
+                onClick={() => { setShowDownloadGate(false); onOpenPricing?.(); }}
+                className="flex-1 py-2.5 bg-green-500 hover:bg-green-400 text-slate-950 font-bold text-sm rounded-xl flex items-center justify-center gap-2 transition-colors"
+              >
+                <Zap size={15} /> See plans
+              </button>
+              <button
+                onClick={() => setShowDownloadGate(false)}
+                className={`px-4 py-2.5 rounded-xl text-sm font-medium transition-colors ${darkMode ? 'bg-slate-800 text-slate-400 hover:bg-slate-700' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}`}
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
