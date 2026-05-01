@@ -1,0 +1,171 @@
+/**
+ * useEntitlements
+ *
+ * Single source of truth for what the current user can and cannot do.
+ *
+ * Fetches once per session:
+ *   - profiles(plan, plan_expires_at, is_founding_member, pricing_region, currency)
+ *   - billing_config(billing_active)
+ *
+ * When billing_active = false (pre-launch): everyone gets full access
+ * regardless of plan — the billing system is built but dormant.
+ *
+ * Expose via EntitlementsContext so any component can read without prop-drilling.
+ */
+
+import { useState, useEffect, useCallback } from 'react';
+import { db } from '../supabase';
+import type { Plan, PricingRegion, BillingCurrency } from '../utils/prices';
+
+export type { Plan, PricingRegion, BillingCurrency };
+
+export interface Entitlements {
+  /** True once the async fetch has resolved */
+  loaded: boolean;
+  /** Whether the billing system is active (controlled via billing_config.billing_active) */
+  billingActive: boolean;
+  plan: Plan;
+  /** False if the plan has a past plan_expires_at date */
+  isActive: boolean;
+  isFounding: boolean;
+  pricingRegion: PricingRegion;
+  currency: BillingCurrency;
+
+  // ── Feature flags ──────────────────────────────────────────────────────────
+  /** Unlimited downloads (paid plan, OR billing not yet active) */
+  canDownloadUnlimited: boolean;
+  /** 3 for free when billing active, otherwise unlimited */
+  monthlyDownloadLimit: number;
+  /** Show ad placeholders (free + billing active) */
+  showAds: boolean;
+  /** Can save sheets for offline viewing */
+  hasOfflineAccess: boolean;
+  /** Can submit requests and vote (viewing is always open) */
+  hasRequestAccess: boolean;
+  /** Ensemble team features */
+  hasTeamFeatures: boolean;
+  teamSeats: number;
+}
+
+const FULL_ACCESS: Omit<Entitlements, 'loaded' | 'billingActive' | 'plan' | 'isActive' | 'isFounding' | 'pricingRegion' | 'currency'> = {
+  canDownloadUnlimited:  true,
+  monthlyDownloadLimit:  999999,
+  showAds:               false,
+  hasOfflineAccess:      true,
+  hasRequestAccess:      true,
+  hasTeamFeatures:       false,
+  teamSeats:             1,
+};
+
+function isPaid(plan: Plan): boolean {
+  return ['maestro_monthly', 'maestro_yearly', 'ensemble', 'founding'].includes(plan);
+}
+
+function buildEntitlements(
+  plan: Plan,
+  planExpiresAt: string | null,
+  isFounding: boolean,
+  pricingRegion: PricingRegion,
+  currency: BillingCurrency,
+  billingActive: boolean,
+): Entitlements {
+  // Pre-launch: full access for everyone
+  if (!billingActive) {
+    return {
+      loaded: true,
+      billingActive: false,
+      plan,
+      isActive: true,
+      isFounding,
+      pricingRegion,
+      currency,
+      ...FULL_ACCESS,
+    };
+  }
+
+  const expired    = planExpiresAt ? new Date(planExpiresAt) < new Date() : false;
+  const effectPlan = expired ? 'free' : plan;
+  const paid       = isPaid(effectPlan);
+
+  return {
+    loaded: true,
+    billingActive: true,
+    plan: effectPlan,
+    isActive: !expired,
+    isFounding,
+    pricingRegion,
+    currency,
+
+    canDownloadUnlimited:  paid,
+    monthlyDownloadLimit:  paid ? 999999 : 3,
+    showAds:               !paid,
+    hasOfflineAccess:      paid,
+    hasRequestAccess:      paid,
+    hasTeamFeatures:       effectPlan === 'ensemble',
+    teamSeats:             effectPlan === 'ensemble' ? 20 : 1,
+  };
+}
+
+const DEFAULT_ENTITLEMENTS: Entitlements = {
+  loaded:               false,
+  billingActive:        false,
+  plan:                 'free',
+  isActive:             true,
+  isFounding:           false,
+  pricingRegion:        'international',
+  currency:             'USD',
+  ...FULL_ACCESS,
+};
+
+export function useEntitlements(userId: string | null): Entitlements {
+  const [state, setState] = useState<Entitlements>(DEFAULT_ENTITLEMENTS);
+
+  const fetch = useCallback(async () => {
+    if (!userId) {
+      // Logged-out user: apply free-tier entitlements based on billing state
+      const { data: cfg } = await db
+        .from('billing_config')
+        .select('billing_active')
+        .eq('id', 1)
+        .single();
+      const billingActive = cfg?.billing_active ?? false;
+      setState(buildEntitlements('free', null, false, 'international', 'USD', billingActive));
+      return;
+    }
+
+    const [profileRes, configRes] = await Promise.all([
+      db.from('profiles')
+        .select('plan, plan_expires_at, is_founding_member, pricing_region, currency')
+        .eq('id', userId)
+        .single(),
+      db.from('billing_config')
+        .select('billing_active')
+        .eq('id', 1)
+        .single(),
+    ]);
+
+    const profile      = profileRes.data;
+    const billingActive = configRes.data?.billing_active ?? false;
+
+    if (!profile) {
+      setState(buildEntitlements('free', null, false, 'international', 'USD', billingActive));
+      return;
+    }
+
+    setState(buildEntitlements(
+      (profile.plan as Plan) ?? 'free',
+      profile.plan_expires_at,
+      profile.is_founding_member ?? false,
+      (profile.pricing_region as PricingRegion) ?? 'international',
+      (profile.currency as BillingCurrency) ?? 'USD',
+      billingActive,
+    ));
+  }, [userId]);
+
+  useEffect(() => { fetch(); }, [fetch]);
+
+  return state;
+}
+
+/** Call this to force-refresh entitlements (e.g. after a successful payment) */
+export { useEntitlements as default };
