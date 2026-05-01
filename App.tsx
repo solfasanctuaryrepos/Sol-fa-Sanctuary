@@ -23,6 +23,8 @@ import { useOfflineSheets } from './hooks/useOfflineSheets';
 import { useInstallPrompt } from './hooks/useInstallPrompt';
 import InstallBanner from './components/InstallBanner';
 import { EntitlementsProvider } from './contexts/EntitlementsContext';
+import PricingPage from './components/PricingPage';
+import FoundingMemberBanner from './components/FoundingMemberBanner';
 
 interface SupabaseUser {
   id: string;
@@ -512,17 +514,19 @@ const App: React.FC = () => {
           />
         );
       case 'pricing':
-        // PricingPage built in Phase 4 — stub renders here for now
-        return (
-          <div className={`min-h-[60vh] flex items-center justify-center ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>
-            <p className="text-sm font-medium">Pricing page — coming soon</p>
-          </div>
-        );
       case 'founding-member':
         return (
-          <div className={`min-h-[60vh] flex items-center justify-center ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>
-            <p className="text-sm font-medium">Founding Member page — coming soon</p>
-          </div>
+          <PricingPage
+            darkMode={darkMode}
+            currentUser={currentUser}
+            paymentReturnStatus={paymentReturnStatus}
+            paymentReturnId={paymentReturnId}
+            onAuthRequired={() => setIsAuthModalOpen(true)}
+            onPaymentHandled={() => {
+              setPaymentReturnStatus(null);
+              setPaymentReturnId(null);
+            }}
+          />
         );
       case 'billing-admin':
         return (
@@ -603,7 +607,13 @@ const App: React.FC = () => {
             canInstall={installPrompt.canInstall}
             onInstall={installPrompt.triggerInstall}
           />
-          
+
+          {/* Founding-member window banner — only visible during launch window */}
+          <FoundingMemberBanner
+            darkMode={darkMode}
+            onOpenPricing={() => setCurrentView('pricing')}
+          />
+
           <main className="max-w-7xl mx-auto px-4 pt-3 pb-12 lg:py-12 pb-24">
             {renderView()}
           </main>
