@@ -25,6 +25,7 @@ import InstallBanner from './components/InstallBanner';
 import { EntitlementsProvider } from './contexts/EntitlementsContext';
 import PricingPage from './components/PricingPage';
 import FoundingMemberBanner from './components/FoundingMemberBanner';
+import BillingAdminPage from './components/BillingAdminPage';
 
 interface SupabaseUser {
   id: string;
@@ -269,13 +270,34 @@ const App: React.FC = () => {
     }
   }, []);
 
+  // ── Pricing region detection ─────────────────────────────────────────────────
+  // Called once on first login (when pricing_region is null in DB).
+  // Non-blocking: runs in the background so login UX is not delayed.
+  const detectAndSaveRegion = useCallback(async (userId: string) => {
+    try {
+      const res = await fetch('https://ipapi.co/json/', {
+        signal: AbortSignal.timeout(5000),
+        headers: { 'Accept': 'application/json' },
+      });
+      if (!res.ok) throw new Error('ipapi error');
+      const geo = await res.json();
+      const isLocal = geo?.country_code === 'CM';
+      await db.from('profiles').update({
+        pricing_region: isLocal ? 'local' : 'international',
+        currency:       isLocal ? 'XAF'   : 'USD',
+      }).eq('id', userId);
+    } catch {
+      // Silently fall back to 'international' — already the DB default
+    }
+  }, []);
+
   // Load role from profiles table, fall back to email-based heuristic.
   const resolveUser = useCallback(async (user: SupabaseUser | null) => {
     if (!user?.email) { setCurrentUser(null); setUserFavorites([]); return; }
     try {
       const { data: profile } = await db
         .from('profiles')
-        .select('role, display_name')
+        .select('role, display_name, pricing_region')
         .eq('id', user.id)
         .maybeSingle();
 
@@ -293,6 +315,11 @@ const App: React.FC = () => {
           display_name: displayName,
           role,
         }, { onConflict: 'id' });
+        // First login — detect region in background
+        detectAndSaveRegion(user.id);
+      } else if (!profile.pricing_region) {
+        // Existing user with no region saved yet (pre-billing migration)
+        detectAndSaveRegion(user.id);
       }
 
       setCurrentUser({
@@ -311,7 +338,7 @@ const App: React.FC = () => {
         emailVerified: !!user.email_confirmed_at,
       });
     }
-  }, [fetchUserFavorites]);
+  }, [fetchUserFavorites, detectAndSaveRegion]);
 
   useEffect(() => {
     // getSession() is the single source of truth on mount.
@@ -529,11 +556,9 @@ const App: React.FC = () => {
           />
         );
       case 'billing-admin':
-        return (
-          <div className={`min-h-[60vh] flex items-center justify-center ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>
-            <p className="text-sm font-medium">Billing Admin page — coming soon</p>
-          </div>
-        );
+        return currentUser?.role === 'admin' ? (
+          <BillingAdminPage darkMode={darkMode} />
+        ) : null;
       default:
         return <LandingPage
           onUploadClick={currentUser ? () => setIsUploadModalOpen(true) : handleOpenLogin}
