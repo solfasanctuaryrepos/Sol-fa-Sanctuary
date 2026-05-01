@@ -8,7 +8,6 @@ import AdminDashboard from './components/AdminDashboard';
 import AboutPage from './components/AboutPage';
 import UploadModal from './components/UploadModal';
 import AuthModal from './components/AuthModal';
-import DonateModal, { DonateThankyouBanner } from './components/DonateModal';
 import FullPreviewPage from './components/FullPreviewPage';
 import ProfilePage from './components/ProfilePage';
 import CollectionsPage from './components/CollectionsPage';
@@ -56,8 +55,8 @@ const App: React.FC = () => {
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [isRecoveryMode, setIsRecoveryMode] = useState(false);
-  const [isDonateModalOpen, setIsDonateModalOpen] = useState(false);
-  const [donateBannerStatus, setDonateBannerStatus] = useState<'success' | 'failed' | 'cancelled' | null>(null);
+  const [paymentReturnStatus, setPaymentReturnStatus] = useState<'success' | 'failed' | 'cancelled' | null>(null);
+  const [paymentReturnId, setPaymentReturnId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [activePreview, setActivePreview] = useState<MusicSheet | null>(null);
   const [sheets, setSheets] = useState<MusicSheet[]>([]);
@@ -94,7 +93,7 @@ const App: React.FC = () => {
 
   // Views that are meaningful to restore on refresh.
   // 'profile' and 'collections' are contextual (need extra state) — they reset to home.
-  const HASHABLE_VIEWS: View[] = ['library', 'dashboard', 'admin', 'about', 'help'];
+  const HASHABLE_VIEWS: View[] = ['library', 'dashboard', 'admin', 'about', 'help', 'pricing', 'billing-admin'];
 
   // Sync current view → URL hash so the page survives a refresh.
   useEffect(() => {
@@ -122,20 +121,24 @@ const App: React.FC = () => {
     }
 
     // Return from Moneroo checkout — Moneroo appends ?paymentId=xxx&paymentStatus=success|failed|cancelled
-    // We also set payment=return so we can distinguish Moneroo returns from cold loads.
+    // We preserve the paymentId so we can verify the payment server-side.
     if (params.get('payment') === 'return') {
       const status = params.get('paymentStatus') ?? 'success';
-      const bannerStatus =
+      const pid    = params.get('paymentId') ?? null;
+      const returnStatus =
         status === 'success'   ? 'success'   :
         status === 'failed'    ? 'failed'    :
         status === 'cancelled' ? 'cancelled' : 'success';
-      setDonateBannerStatus(bannerStatus);
+      setPaymentReturnStatus(returnStatus);
+      setPaymentReturnId(pid);
       // Strip payment params from the URL cleanly
       const clean = new URL(window.location.href);
       clean.searchParams.delete('payment');
       clean.searchParams.delete('paymentStatus');
       clean.searchParams.delete('paymentId');
       window.history.replaceState({}, '', clean.toString());
+      // Navigate to pricing page to show result
+      setCurrentView('pricing');
     }
     if (sheetId) {
       const fetchDeepLinkedSheet = async () => {
@@ -507,6 +510,25 @@ const App: React.FC = () => {
             onBack={() => { setCurrentView(previousView); setActivePreview(previousPreview); }}
           />
         );
+      case 'pricing':
+        // PricingPage built in Phase 4 — stub renders here for now
+        return (
+          <div className={`min-h-[60vh] flex items-center justify-center ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>
+            <p className="text-sm font-medium">Pricing page — coming soon</p>
+          </div>
+        );
+      case 'founding-member':
+        return (
+          <div className={`min-h-[60vh] flex items-center justify-center ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>
+            <p className="text-sm font-medium">Founding Member page — coming soon</p>
+          </div>
+        );
+      case 'billing-admin':
+        return (
+          <div className={`min-h-[60vh] flex items-center justify-center ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>
+            <p className="text-sm font-medium">Billing Admin page — coming soon</p>
+          </div>
+        );
       default:
         return <LandingPage
           onUploadClick={currentUser ? () => setIsUploadModalOpen(true) : handleOpenLogin}
@@ -575,7 +597,7 @@ const App: React.FC = () => {
             darkMode={darkMode}
             onThemeToggle={toggleTheme}
             onShowShortcuts={() => { setShowShortcuts(true); }}
-            onDonate={() => setIsDonateModalOpen(true)}
+            onOpenPricing={() => setCurrentView('pricing')}
             canInstall={installPrompt.canInstall}
             onInstall={installPrompt.triggerInstall}
           />
@@ -673,21 +695,7 @@ const App: React.FC = () => {
         recoveryMode={isRecoveryMode}
       />
 
-      {isDonateModalOpen && (
-        <DonateModal
-          darkMode={darkMode}
-          onClose={() => setIsDonateModalOpen(false)}
-          currentUserEmail={currentUser?.email}
-        />
-      )}
-
-      {donateBannerStatus && (
-        <DonateThankyouBanner
-          darkMode={darkMode}
-          status={donateBannerStatus}
-          onDismiss={() => setDonateBannerStatus(null)}
-        />
-      )}
+      {/* Payment result banner rendered by PricingPage when paymentReturnStatus is set */}
 
       {showOnboarding && (
         <OnboardingTour

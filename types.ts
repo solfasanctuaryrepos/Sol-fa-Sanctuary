@@ -1,5 +1,5 @@
 
-export type View = 'home' | 'library' | 'dashboard' | 'admin' | 'about' | 'profile' | 'collections' | 'help';
+export type View = 'home' | 'library' | 'dashboard' | 'admin' | 'about' | 'profile' | 'collections' | 'help' | 'pricing' | 'founding-member' | 'billing-admin';
 export type AdminTab = 'users' | 'content' | 'requests';
 export type DashTab = 'mine' | 'favourites' | 'requests';
 

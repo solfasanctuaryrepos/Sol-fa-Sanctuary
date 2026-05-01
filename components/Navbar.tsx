@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Home, Music, LayoutDashboard, ShieldAlert, Moon, Sun, LogOut, LogIn, Info, HelpCircle, Heart, Download } from 'lucide-react';
+import { Home, Music, LayoutDashboard, ShieldAlert, Moon, Sun, LogOut, LogIn, Info, HelpCircle, Zap, Download } from 'lucide-react';
 import { View } from '../types';
 
 interface NavbarProps {
@@ -12,13 +12,13 @@ interface NavbarProps {
   darkMode: boolean;
   onThemeToggle: () => void;
   onShowShortcuts?: () => void;
-  onDonate?: () => void;
+  onOpenPricing?: () => void;
   /** True when the browser has offered an install prompt — shows the Install item */
   canInstall?: boolean;
   onInstall?: () => void;
 }
 
-const Navbar: React.FC<NavbarProps> = ({ activeView, onViewChange, currentUser, onLogout, onLogin, darkMode, onThemeToggle, onShowShortcuts, onDonate, canInstall, onInstall }) => {
+const Navbar: React.FC<NavbarProps> = ({ activeView, onViewChange, currentUser, onLogout, onLogin, darkMode, onThemeToggle, onShowShortcuts, onOpenPricing, canInstall, onInstall }) => {
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -75,16 +75,16 @@ const Navbar: React.FC<NavbarProps> = ({ activeView, onViewChange, currentUser, 
         </div>
 
         <div className="flex items-center gap-1.5">
-          {/* Donate button — icon-only on mobile, icon + label on md+ */}
-          {onDonate && (
+          {/* Upgrade/Pricing button */}
+          {onOpenPricing && (
             <button
-              onClick={onDonate}
-              title="Support Sol-fa Sanctuary"
-              aria-label="Support Sol-fa Sanctuary"
-              className="flex items-center gap-1.5 px-2 py-2 md:px-3 rounded-lg border border-green-500/30 text-green-500 hover:bg-green-500/10 transition-colors text-sm font-semibold"
+              onClick={onOpenPricing}
+              title="View plans & pricing"
+              aria-label="View plans & pricing"
+              className="flex items-center gap-1.5 px-2 py-2 md:px-3 rounded-lg border border-amber-500/40 text-amber-500 hover:bg-amber-500/10 transition-colors text-sm font-semibold"
             >
-              <Heart size={15} className="fill-green-500 shrink-0" />
-              <span className="hidden md:inline">Support</span>
+              <Zap size={15} className="shrink-0" />
+              <span className="hidden md:inline">Upgrade</span>
             </button>
           )}
 
