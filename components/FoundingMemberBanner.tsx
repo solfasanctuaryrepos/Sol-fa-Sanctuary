@@ -18,7 +18,6 @@ import { db } from '../supabase';
 
 const DISMISS_KEY = 'solfa-founding-banner-dismissed-at';
 const DISMISS_COOLDOWN_MS = 24 * 60 * 60 * 1000; // 24 hours
-const FOUNDING_WINDOW_DAYS = 30;
 
 interface FoundingMemberBannerProps {
   darkMode: boolean;
@@ -33,19 +32,18 @@ const FoundingMemberBanner: React.FC<FoundingMemberBannerProps> = ({ darkMode, o
   useEffect(() => {
     if (!ent.loaded || !ent.billingActive || ent.isFounding) return;
 
-    // Fetch activated_at from billing_config to compute founding window
+    // Fetch founding_window_closes_at from billing_config
     const check = async () => {
       const { data } = await db
         .from('billing_config')
-        .select('activated_at')
+        .select('founding_window_closes_at')
         .eq('id', 1)
         .single();
 
-      if (!data?.activated_at) return;
+      if (!data?.founding_window_closes_at) return;
 
-      const activatedAt = new Date(data.activated_at);
-      const windowEnd   = new Date(activatedAt.getTime() + FOUNDING_WINDOW_DAYS * 24 * 60 * 60 * 1000);
-      const now         = new Date();
+      const windowEnd = new Date(data.founding_window_closes_at);
+      const now       = new Date();
 
       if (now >= windowEnd) return; // founding window closed
 

@@ -29,7 +29,8 @@ interface BillingAdminPageProps {
 interface BillingConfig {
   billing_active: boolean;
   quality_sheet_threshold: number;
-  activated_at: string | null;
+  billing_activated_at: string | null;
+  founding_window_closes_at: string | null;
 }
 
 interface PlanStat {
@@ -203,12 +204,21 @@ const BillingAdminPage: React.FC<BillingAdminPageProps> = ({ darkMode }) => {
     )) return;
 
     setTogglingBilling(true);
+    const now = new Date().toISOString();
     try {
       await db.from('billing_config').update({
         billing_active: newActive,
-        ...(newActive && !config.activated_at ? { activated_at: new Date().toISOString() } : {}),
+        ...(newActive && !config.billing_activated_at ? {
+          billing_activated_at: now,
+          founding_window_closes_at: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+        } : {}),
       }).eq('id', 1);
-      setConfig(c => c ? { ...c, billing_active: newActive, activated_at: c.activated_at ?? (newActive ? new Date().toISOString() : null) } : c);
+      setConfig(c => c ? {
+        ...c,
+        billing_active: newActive,
+        billing_activated_at: c.billing_activated_at ?? (newActive ? now : null),
+        founding_window_closes_at: c.founding_window_closes_at ?? (newActive ? new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString() : null),
+      } : c);
     } finally {
       setTogglingBilling(false);
     }
@@ -228,6 +238,7 @@ const BillingAdminPage: React.FC<BillingAdminPageProps> = ({ darkMode }) => {
     try {
       const { error } = await db.from('promo_codes').insert({
         code:         promoCodeInput.trim().toUpperCase(),
+        type:         'founding',
         max_uses:     promoMaxUses,
         current_uses: 0,
         is_active:    true,
@@ -341,7 +352,7 @@ const BillingAdminPage: React.FC<BillingAdminPageProps> = ({ darkMode }) => {
             {config?.billing_active ? (
               <p className={`text-sm ${textSecondary}`}>
                 Plans enforced · Free-tier limits apply · Activated{' '}
-                {config.activated_at ? new Date(config.activated_at).toLocaleDateString() : '—'}
+                {config.billing_activated_at ? new Date(config.billing_activated_at).toLocaleDateString() : '—'}
               </p>
             ) : (
               <p className={`text-sm ${textSecondary}`}>
