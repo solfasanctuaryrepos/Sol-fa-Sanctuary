@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { X, BookOpen, AlertTriangle, ChevronRight, Loader2 } from 'lucide-react';
+import { X, BookOpen, AlertTriangle, ChevronRight, Loader2, Lock, Zap } from 'lucide-react';
 import { db, auth } from '../supabase';
 import { SheetRequest } from '../types';
 import Modal from './Modal';
+import { useEntitlementsContext } from '../contexts/EntitlementsContext';
 
 interface SimilarResult {
   id: string;
@@ -27,6 +28,7 @@ interface RequestModalProps {
   onRequestSubmitted?: (req: SheetRequest) => void;
   onViewSheet?: (sheetId: string) => void;
   onViewRequest?: (reqId: string) => void;
+  onOpenPricing?: () => void;
 }
 
 function useDebounce<T>(value: T, ms: number): T {
@@ -41,8 +43,9 @@ function useDebounce<T>(value: T, ms: number): T {
 const RequestModal: React.FC<RequestModalProps> = ({
   isOpen, onClose, darkMode, currentUserId, userDisplayName, userEmail,
   prefillTitle = '', prefillComposer = '',
-  onRequestSubmitted, onViewSheet, onViewRequest,
+  onRequestSubmitted, onViewSheet, onViewRequest, onOpenPricing,
 }) => {
+  const ent = useEntitlementsContext();
   const [title, setTitle] = useState(prefillTitle);
   const [composer, setComposer] = useState(prefillComposer);
   const [notes, setNotes] = useState('');
@@ -171,6 +174,28 @@ const RequestModal: React.FC<RequestModalProps> = ({
         </button>
       </div>
 
+      {/* ── Request gate: paid plan required when billing is active ─────────── */}
+      {ent.billingActive && !ent.hasRequestAccess && (
+        <div className={`mx-6 mt-4 rounded-xl border p-4 space-y-3 ${darkMode ? 'bg-amber-950/30 border-amber-800/40' : 'bg-amber-50 border-amber-200'}`}>
+          <div className="flex items-center gap-2">
+            <Lock size={16} className="text-amber-500 shrink-0" />
+            <p className={`font-semibold text-sm ${darkMode ? 'text-amber-300' : 'text-amber-700'}`}>
+              Submitting requests requires a paid plan
+            </p>
+          </div>
+          <p className={`text-xs ${darkMode ? 'text-amber-400' : 'text-amber-600'}`}>
+            Free users can browse and view community requests. Upgrade to Maestro to submit new requests and vote.
+          </p>
+          <button
+            type="button"
+            onClick={() => { onClose(); onOpenPricing?.(); }}
+            className="w-full py-2 bg-green-500 hover:bg-green-400 text-slate-950 font-bold text-sm rounded-lg flex items-center justify-center gap-2 transition-colors"
+          >
+            <Zap size={14} /> See plans
+          </button>
+        </div>
+      )}
+
       <form className="p-6 space-y-5" onSubmit={handleSubmit}>
         {/* Title */}
         <div className="space-y-1.5">
@@ -277,7 +302,7 @@ const RequestModal: React.FC<RequestModalProps> = ({
 
         <button
           type="submit"
-          disabled={isSubmitting || !title.trim()}
+          disabled={isSubmitting || !title.trim() || (ent.billingActive && !ent.hasRequestAccess)}
           className="w-full py-3 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-xl transition-all shadow-lg active:scale-95 disabled:opacity-50 flex items-center justify-center gap-2"
         >
           {isSubmitting ? <><Loader2 className="animate-spin" size={18} /> Submitting…</> : 'Submit Request'}

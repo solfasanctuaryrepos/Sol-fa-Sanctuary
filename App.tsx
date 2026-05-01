@@ -591,6 +591,7 @@ const App: React.FC = () => {
           offlineSaveProgress={offlineSheets.progress}
           onSaveOffline={() => activePreview && offlineSheets.saveForOffline(activePreview)}
           onRemoveOffline={() => activePreview && offlineSheets.removeFromOffline(activePreview)}
+          onOpenPricing={() => { setActivePreview(null); setCurrentView('pricing'); }}
         />
       ) : (
         <>
@@ -698,6 +699,7 @@ const App: React.FC = () => {
           if (s) { setActivePreview(s); setIsRequestModalOpen(false); }
           else { setCurrentView('library'); setIsRequestModalOpen(false); }
         }}
+        onOpenPricing={() => { setIsRequestModalOpen(false); setCurrentView('pricing'); }}
       />
 
       <AuthModal
