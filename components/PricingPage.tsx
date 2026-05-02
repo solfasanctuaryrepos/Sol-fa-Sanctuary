@@ -13,7 +13,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import {
   CheckCircle2, XCircle, Zap, Star, Users, Shield, WifiOff,
   Download, MessageSquarePlus, Sparkles, Crown, Tag, Loader2,
-  ArrowRight, Info, X, RefreshCw,
+  ArrowRight, Info, X, RefreshCw, Bell,
 } from 'lucide-react';
 import { supabase, db } from '../supabase';
 import { useEntitlementsContext } from '../contexts/EntitlementsContext';
@@ -123,6 +123,11 @@ const PlanCard: React.FC<PlanCardProps> = ({
           Your Plan
         </div>
       )}
+      {!billingActive && !isCurrent && (
+        <div className="absolute top-3 right-3 flex items-center gap-1 bg-blue-500/10 border border-blue-500/20 text-blue-400 text-[10px] font-bold px-2 py-0.5 rounded-full tracking-wide">
+          Launching soon
+        </div>
+      )}
 
       {/* Icon + title */}
       <div className="flex items-start gap-3">
@@ -166,21 +171,28 @@ const PlanCard: React.FC<PlanCardProps> = ({
         <div className={`text-center text-sm font-medium py-2 rounded-xl ${accentClass} opacity-70`}>
           Active plan
         </div>
-      ) : (
+      ) : billingActive ? (
         <button
           onClick={() => onUpgrade(plan)}
-          disabled={loading || !billingActive}
-          className={`w-full py-2.5 rounded-xl text-sm font-bold transition-all flex items-center justify-center gap-2
-            ${billingActive
-              ? `bg-green-500 text-slate-950 hover:bg-green-400 active:scale-95 disabled:opacity-60`
-              : `${darkMode ? 'bg-slate-800 text-slate-500' : 'bg-slate-100 text-slate-400'} cursor-not-allowed`
-            }
-          `}
+          disabled={loading}
+          className="w-full py-2.5 rounded-xl text-sm font-bold transition-all flex items-center justify-center gap-2 bg-green-500 text-slate-950 hover:bg-green-400 active:scale-95 disabled:opacity-60"
         >
           {loading ? <Loader2 size={16} className="animate-spin" /> : null}
-          {billingActive ? (loading ? 'Redirecting…' : 'Upgrade') : 'Coming Soon'}
-          {billingActive && !loading && <ArrowRight size={14} />}
+          {loading ? 'Redirecting…' : 'Upgrade'}
+          {!loading && <ArrowRight size={14} />}
         </button>
+      ) : (
+        <a
+          href="mailto:solfasanctuary@gmail.com?subject=Notify me when billing launches"
+          className={`w-full py-2.5 rounded-xl text-sm font-bold transition-all flex items-center justify-center gap-2 border
+            ${darkMode
+              ? 'border-slate-700 text-slate-400 hover:border-slate-500 hover:text-slate-200'
+              : 'border-slate-200 text-slate-500 hover:border-slate-300 hover:text-slate-700'
+            }`}
+        >
+          <Bell size={14} />
+          Get notified
+        </a>
       )}
     </div>
   );
@@ -397,9 +409,19 @@ const PricingPage: React.FC<PricingPageProps> = ({
 
         {/* Billing not active notice */}
         {ent.loaded && !ent.billingActive && (
-          <div className={`max-w-lg mx-auto mt-3 rounded-xl border p-3 flex items-center gap-2 text-sm ${darkMode ? 'bg-slate-900 border-slate-700 text-slate-400' : 'bg-slate-50 border-slate-200 text-slate-500'}`}>
-            <Info size={15} className="shrink-0 text-blue-400" />
-            <span>Billing is not yet active. Everyone enjoys full access for free until launch — no credit card needed.</span>
+          <div className={`max-w-lg mx-auto mt-4 rounded-xl border p-4 flex items-start gap-3 ${darkMode ? 'bg-blue-950/30 border-blue-800/50' : 'bg-blue-50 border-blue-200'}`}>
+            <Sparkles size={16} className="text-blue-400 shrink-0 mt-0.5" />
+            <div className="text-left">
+              <p className={`text-sm font-semibold ${darkMode ? 'text-blue-300' : 'text-blue-700'}`}>
+                Billing is launching soon
+              </p>
+              <p className={`text-xs mt-0.5 ${darkMode ? 'text-blue-400' : 'text-blue-600'}`}>
+                Everyone enjoys full access for free until launch — no credit card needed.{' '}
+                <a href="mailto:solfasanctuary@gmail.com?subject=Notify me when billing launches" className="underline underline-offset-2 font-medium">
+                  Get notified when plans go live.
+                </a>
+              </p>
+            </div>
           </div>
         )}
       </div>
@@ -507,22 +529,27 @@ const PricingPage: React.FC<PricingPageProps> = ({
                 <CheckCircle2 size={16} className="text-amber-500" />
                 <span className="text-sm font-semibold text-amber-500">You're a Founding Member!</span>
               </div>
-            ) : (
+            ) : ent.billingActive ? (
               <button
                 onClick={() => handleUpgrade('founding')}
-                disabled={checkoutLoading !== null || !ent.billingActive}
-                className={`w-full py-3 rounded-xl text-sm font-bold flex items-center justify-center gap-2 transition-all
-                  ${ent.billingActive
-                    ? 'bg-amber-500 text-slate-950 hover:bg-amber-400 active:scale-95 disabled:opacity-60'
-                    : `${darkMode ? 'bg-slate-800 text-slate-500' : 'bg-slate-100 text-slate-400'} cursor-not-allowed`
-                  }`}
+                disabled={checkoutLoading !== null}
+                className="w-full py-3 rounded-xl text-sm font-bold flex items-center justify-center gap-2 transition-all bg-amber-500 text-slate-950 hover:bg-amber-400 active:scale-95 disabled:opacity-60"
               >
                 {checkoutLoading === 'founding' ? <Loader2 size={16} className="animate-spin" /> : <Sparkles size={16} />}
-                {ent.billingActive
-                  ? (checkoutLoading === 'founding' ? 'Redirecting…' : 'Become a Founding Member')
-                  : 'Coming Soon'
-                }
+                {checkoutLoading === 'founding' ? 'Redirecting…' : 'Become a Founding Member'}
               </button>
+            ) : (
+              <a
+                href="mailto:solfasanctuary@gmail.com?subject=Notify me when Founding Member launches"
+                className={`w-full py-3 rounded-xl text-sm font-bold flex items-center justify-center gap-2 transition-all border
+                  ${darkMode
+                    ? 'border-amber-800/60 text-amber-500 hover:border-amber-700 hover:bg-amber-950/30'
+                    : 'border-amber-200 text-amber-600 hover:border-amber-300 hover:bg-amber-50'
+                  }`}
+              >
+                <Bell size={16} />
+                Get notified at launch
+              </a>
             )}
           </div>
         </div>
