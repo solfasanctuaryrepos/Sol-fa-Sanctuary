@@ -52,17 +52,17 @@ Prior to this, successfully migrated the application from Firebase to Supabase. 
 - [x] Initialized remote, renamed master branch to main, and pushed all local files to GitHub.
 
 #### Phase 7: Production Deployment
-- [x] Linked the local project to Vercel using the CLI (`npx vercel`).
-- [x] Corrected the project name to meet Vercel's naming conventions (`solfasanctuary`).
-- [x] Successfully deployed the first production build to Vercel.
-- [x] Configured permanent environment variables (`VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`) in the Vercel project settings for future automated builds.
+- [x] Deployed to Coolify on self-hosted VPS.
+- [x] Build: `npm run build` → `dist/` served via nginx in Docker container.
+- [x] Environment variables (`VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`) set as Coolify build variables.
+- [x] Self-hosted Supabase at `api.solfasanctuary.com`.
 
 #### Phase 8: Production Polish (Fixed Deployment Errors)
 - [x] Removed Tailwind CDN and migrated to a bundled Tailwind CSS 4.0 setup.
 - [x] Relocated PWA assets (`sw.js`, `manifest.json`) from root to `public/` to fix 404 errors in the build output.
 - [x] Fixed missing `index.css` issue by creating a proper root stylesheet handled by Vite.
 - [x] Removed Redundant `importmap` and switched to standard bundling for better production compatibility.
-- [x] Verified build success and asset delivery to Vercel `dist/`.
+- [x] Verified build success and asset delivery to `dist/`.
 
 #### Phase 9: Critical Bug Fixes (Auth, Data, Cache)
 | Status | Category | Problem | Solution |

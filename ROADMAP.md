@@ -77,7 +77,7 @@
 ## Completed
 
 - [x] Firebase → Supabase migration
-- [x] Production deployment (Vercel)
+- [x] Production deployment (Coolify / VPS)
 - [x] Auth (email/password + Google OAuth)
 - [x] Full CRUD for music sheets
 - [x] Admin dashboard (users + content tabs)
