@@ -236,6 +236,9 @@ const PricingPage: React.FC<PricingPageProps> = ({
 }) => {
   const ent = useEntitlementsContext();
 
+  // Always re-fetch live billing state when pricing page opens
+  useEffect(() => { ent.refresh(); }, []);
+
   const [checkoutLoading, setCheckoutLoading] = useState<Plan | null>(null);
   const [checkoutError, setCheckoutError] = useState<string | null>(null);
   const [maestroBilling, setMaestroBilling] = useState<'monthly' | 'yearly'>('monthly');
