@@ -139,7 +139,7 @@ const LazyPdfPage: React.FC<LazyPdfPageProps> = ({
   const textSecondary = darkMode ? 'text-slate-500' : 'text-slate-400';
 
   return (
-    <div ref={containerRef} className="score-page min-h-[500px] w-full flex items-center justify-center relative">
+    <div ref={containerRef} className="score-page w-full relative">
       {imgUrl ? (
         <img
           src={imgUrl}
@@ -147,7 +147,7 @@ const LazyPdfPage: React.FC<LazyPdfPageProps> = ({
           className="w-full h-auto rounded shadow-lg border border-slate-700/10 transition-opacity duration-500 ease-in opacity-100"
         />
       ) : (
-        <div className={`flex flex-col items-center gap-3 no-print ${textSecondary}`}>
+        <div className={`min-h-[80px] flex flex-col items-center justify-center gap-3 no-print ${textSecondary}`}>
           <Loader2 className="animate-spin opacity-20" size={32} />
           <p className="text-xs font-serif italic">Preparing Page {index}…</p>
         </div>
@@ -1425,7 +1425,7 @@ const FullPreviewPage: React.FC<FullPreviewPageProps> = ({
                 </button>
               </div>
             ) : (
-              <div className="flex flex-col gap-4 p-2 md:p-4 bg-slate-200/5">
+              <div className="flex flex-col gap-2 sm:gap-4 p-2 md:p-4 bg-slate-200/5">
                 {numPages > 0 ? (
                   Array.from({ length: numPages }).map((_, i) => (
                     <LazyPdfPage
