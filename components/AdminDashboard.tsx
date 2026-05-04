@@ -40,7 +40,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onPreview, darkMode, sh
 
   // ── Promo codes ────────────────────────────────────────────────────────────────
   interface PromoCode {
-    id: string; code: string; max_uses: number; current_uses: number;
+    id: string; code: string; max_uses: number; used_count: number;
     is_active: boolean; expires_at: string | null; created_at: string;
   }
   const [promoCodes, setPromoCodes]       = useState<PromoCode[]>([]);
@@ -75,7 +75,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onPreview, darkMode, sh
     setLastCreatedCode(null);
     try {
       const { error } = await db.from('promo_codes').insert({
-        code, type: 'founding', max_uses: promoMaxUses, current_uses: 0,
+        code, type: 'founding', max_uses: promoMaxUses,
         is_active: true, expires_at: promoExpiry || null,
       });
       if (error) throw error;
@@ -1081,7 +1081,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onPreview, darkMode, sh
                   <code className={`font-mono text-sm font-bold flex-1 min-w-0 truncate ${code.is_active ? (darkMode ? 'text-green-400' : 'text-green-700') : (darkMode ? 'text-slate-600 line-through' : 'text-slate-400 line-through')}`}>
                     {code.code}
                   </code>
-                  <span className={`text-xs shrink-0 ${textSecondary}`}>{code.current_uses}/{code.max_uses} uses</span>
+                  <span className={`text-xs shrink-0 ${textSecondary}`}>{code.used_count}/{code.max_uses} uses</span>
                   {code.expires_at && (
                     <span className={`text-xs hidden sm:inline shrink-0 ${textSecondary}`}>
                       exp. {new Date(code.expires_at).toLocaleDateString()}
