@@ -83,7 +83,8 @@ function buildEntitlements(
     };
   }
 
-  const expired    = planExpiresAt ? new Date(planExpiresAt) < new Date() : false;
+  // Founding members are locked in forever — ignore any stale plan_expires_at value
+  const expired    = isFounding ? false : (planExpiresAt ? new Date(planExpiresAt) < new Date() : false);
   const effectPlan = expired ? 'free' : plan;
   const paid       = isPaid(effectPlan);
 

@@ -127,7 +127,7 @@ BEGIN
     UPDATE profiles
     SET is_founding_member = true,
         plan               = 'founding',
-        plan_expires_at    = NOW() + INTERVAL '365 days'
+        plan_expires_at    = NULL   -- founding membership never expires
     WHERE id = NEW.uploaded_by;
   END IF;
   RETURN NEW;

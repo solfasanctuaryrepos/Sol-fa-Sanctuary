@@ -71,16 +71,13 @@ serve(async (req) => {
     return corsError('You are already a Founding Member', 400);
   }
 
-  // ── Assign founding member status ──────────────────────────────────────────
-  const expiresAt = new Date();
-  expiresAt.setDate(expiresAt.getDate() + 365);
-
+  // ── Assign founding member status (no expiry — locked in forever) ────────
   const { error: updateErr } = await svc
     .from('profiles')
     .update({
       is_founding_member:  true,
       plan:                'founding',
-      plan_expires_at:     expiresAt.toISOString(),
+      plan_expires_at:     null,   // founding membership never expires
       founding_promo_code: code,
     })
     .eq('id', user.id);
@@ -101,6 +98,5 @@ serve(async (req) => {
   return corsResponse({
     success: true,
     message: 'Welcome, Founding Member! Your plan is now active.',
-    expiresAt: expiresAt.toISOString(),
   });
 });
