@@ -21,12 +21,11 @@ Sol-Fa Sanctuary is a specialized platform for discovering, managing, and sharin
 ```
 /
 ├── components/          # React components (modals, pages, UI elements)
-├── firebase.ts          # Firebase init — being replaced by supabase.ts
+├── contexts/            # React context providers (Theme, Entitlements)
+├── supabase.ts          # Supabase client init
 ├── App.tsx              # Main application logic & routing
 ├── types.ts             # Global TypeScript interfaces (MusicSheet, User, etc.)
 ├── constants.ts         # Shared constants
-├── firestore.rules      # Firebase DB rules — being deprecated
-├── storage.rules        # Firebase storage rules — being deprecated
 ├── public/              # Static assets (icons, manifest)
 └── sw.js                # PWA Service Worker
 ```

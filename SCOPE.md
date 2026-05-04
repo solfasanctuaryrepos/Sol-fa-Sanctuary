@@ -95,15 +95,7 @@ Instruction: Read CONTEXT.md, PROGRESS.md, SCOPE.md, and PLAN.md — then execut
 
 ---
 
-## 4. Migration Rules (Firebase → Supabase)
-- Do not remove any Firebase file until its Supabase replacement is confirmed working
-- Keep `firebase.ts` until `supabase.ts` is fully tested
-- Migrate one service per session — do not mix Auth + DB + Storage in one go
-- Check PROGRESS.md migration table before starting any backend task
-
----
-
-## 5. Output Format
+## 4. Output Format
 Every response that includes code must end with:
 
 ```
