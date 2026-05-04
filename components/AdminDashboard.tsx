@@ -448,7 +448,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onPreview, darkMode, sh
         </div>
       )}
 
-      <div className="space-y-6">
+      {(activeTab === 'content' || activeTab === 'users') && <div className="space-y-6">
         <div className={`border rounded-2xl overflow-hidden transition-colors ${tableBg}`}>
           <div className={`p-4 border-b flex flex-col sm:flex-row justify-between items-center gap-4 ${darkMode ? 'border-slate-800' : 'border-slate-200'}`}>
             <div className="relative flex-1 w-full max-w-sm">
@@ -724,7 +724,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onPreview, darkMode, sh
                 </table>
               </div>
             )
-          ) : (
+          ) : activeTab === 'users' ? (
             <div className="overflow-x-auto">
               <table className="w-full text-left min-w-[500px] md:min-w-full">
                 <thead className={darkMode ? 'bg-slate-950/50' : 'bg-slate-50'}>
@@ -824,9 +824,9 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onPreview, darkMode, sh
                 </tbody>
               </table>
             </div>
-          )}
+          ) : null}
         </div>
-      </div>
+      </div>}
 
       {/* Pagination footer */}
       {activeTab === 'content' && totalSheetPages > 1 && (
