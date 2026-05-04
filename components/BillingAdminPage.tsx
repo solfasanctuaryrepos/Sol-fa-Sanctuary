@@ -123,10 +123,12 @@ const BillingAdminPage: React.FC<BillingAdminPageProps> = ({ darkMode }) => {
   // Promo creation
   const [showPromoForm, setShowPromoForm] = useState(false);
   const [promoCodeInput, setPromoCodeInput] = useState('');
-  const [promoMaxUses, setPromoMaxUses]   = useState(10);
+  const [promoMaxUses, setPromoMaxUses]   = useState(1);
   const [promoExpiry, setPromoExpiry]     = useState('');
   const [creatingPromo, setCreatingPromo] = useState(false);
   const [promoMsg, setPromoMsg]           = useState<{ ok: boolean; text: string } | null>(null);
+  const [lastCreatedCode, setLastCreatedCode] = useState<string | null>(null);
+  const [codeCopied, setCodeCopied]       = useState(false);
 
   // Manual founding member
   const [foundingEmail, setFoundingEmail] = useState('');
@@ -230,14 +232,24 @@ const BillingAdminPage: React.FC<BillingAdminPageProps> = ({ darkMode }) => {
     setConfig(c => c ? { ...c, quality_sheet_threshold: newVal } : c);
   };
 
+  // ── Generate a random promo code ─────────────────────────────────────────────
+  const generateCode = () => {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // no ambiguous chars (0/O, 1/I)
+    const segment = (len: number) =>
+      Array.from({ length: len }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
+    setPromoCodeInput(`FOUNDING-${segment(4)}-${segment(4)}`);
+  };
+
   // ── Create promo code ─────────────────────────────────────────────────────────
   const createPromo = async () => {
-    if (!promoCodeInput.trim()) return;
+    const code = promoCodeInput.trim().toUpperCase();
+    if (!code) return;
     setCreatingPromo(true);
     setPromoMsg(null);
+    setLastCreatedCode(null);
     try {
       const { error } = await db.from('promo_codes').insert({
-        code:         promoCodeInput.trim().toUpperCase(),
+        code,
         type:         'founding',
         max_uses:     promoMaxUses,
         current_uses: 0,
@@ -245,17 +257,25 @@ const BillingAdminPage: React.FC<BillingAdminPageProps> = ({ darkMode }) => {
         expires_at:   promoExpiry || null,
       });
       if (error) throw error;
-      setPromoMsg({ ok: true, text: 'Promo code created.' });
+      setLastCreatedCode(code);
+      setPromoMsg({ ok: true, text: 'Code created — copy it below before closing.' });
       setPromoCodeInput('');
-      setPromoMaxUses(10);
+      setPromoMaxUses(1);
       setPromoExpiry('');
-      setShowPromoForm(false);
       loadData();
     } catch (err: any) {
       setPromoMsg({ ok: false, text: err.message ?? 'Failed to create promo code.' });
     } finally {
       setCreatingPromo(false);
     }
+  };
+
+  // ── Copy code to clipboard ────────────────────────────────────────────────────
+  const copyCode = (code: string) => {
+    navigator.clipboard.writeText(code).then(() => {
+      setCodeCopied(true);
+      setTimeout(() => setCodeCopied(false), 2000);
+    });
   };
 
   // ── Deactivate promo code ─────────────────────────────────────────────────────
@@ -283,13 +303,10 @@ const BillingAdminPage: React.FC<BillingAdminPageProps> = ({ darkMode }) => {
         return;
       }
 
-      const expiresAt = new Date();
-      expiresAt.setDate(expiresAt.getDate() + 365);
-
       const { error: updateErr } = await db.from('profiles').update({
         is_founding_member:  true,
         plan:                'founding',
-        plan_expires_at:     expiresAt.toISOString(),
+        plan_expires_at:     null,   // founding membership never expires
         founding_promo_code: 'ADMIN_ASSIGNED',
       }).eq('id', profile.id);
 
@@ -508,20 +525,55 @@ const BillingAdminPage: React.FC<BillingAdminPageProps> = ({ darkMode }) => {
           </button>
         </div>
 
+        {/* Last created code — prominent copy banner */}
+        {lastCreatedCode && (
+          <div className={`mb-5 p-4 rounded-xl border flex items-center gap-3 flex-wrap ${darkMode ? 'bg-green-950/30 border-green-800/50' : 'bg-green-50 border-green-200'}`}>
+            <CheckCircle2 size={16} className="text-green-500 shrink-0" />
+            <span className={`text-sm font-medium ${darkMode ? 'text-green-300' : 'text-green-700'}`}>Code created:</span>
+            <code className={`font-mono font-bold text-base tracking-wider flex-1 ${darkMode ? 'text-green-400' : 'text-green-800'}`}>
+              {lastCreatedCode}
+            </code>
+            <button
+              onClick={() => copyCode(lastCreatedCode)}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors shrink-0
+                ${codeCopied
+                  ? 'bg-green-500 text-slate-950'
+                  : (darkMode ? 'bg-slate-700 text-slate-300 hover:bg-slate-600' : 'bg-white text-slate-700 border border-slate-200 hover:bg-slate-50')}`}
+            >
+              <Copy size={12} />
+              {codeCopied ? 'Copied!' : 'Copy'}
+            </button>
+            <button onClick={() => setLastCreatedCode(null)} className={`p-1 rounded-lg ${darkMode ? 'text-slate-600 hover:text-slate-400' : 'text-slate-300 hover:text-slate-500'}`}>
+              <X size={14} />
+            </button>
+          </div>
+        )}
+
         {/* Create form */}
         {showPromoForm && (
           <div className={`mb-5 p-4 rounded-xl border space-y-3 ${darkMode ? 'bg-slate-800/60 border-slate-700' : 'bg-slate-50 border-slate-200'}`}>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div>
                 <label className={`text-xs font-medium block mb-1 ${textSecondary}`}>Code *</label>
-                <input
-                  type="text"
-                  value={promoCodeInput}
-                  onChange={e => setPromoCodeInput(e.target.value.toUpperCase())}
-                  placeholder="FOUNDING-XXXX"
-                  maxLength={32}
-                  className={inputCls + ' font-mono'}
-                />
+                <div className="flex gap-1.5">
+                  <input
+                    type="text"
+                    value={promoCodeInput}
+                    onChange={e => setPromoCodeInput(e.target.value.toUpperCase())}
+                    placeholder="FOUNDING-XXXX-XXXX"
+                    maxLength={32}
+                    className={inputCls + ' font-mono flex-1 min-w-0'}
+                  />
+                  <button
+                    type="button"
+                    onClick={generateCode}
+                    title="Auto-generate code"
+                    className={`px-2.5 rounded-xl border text-xs font-bold shrink-0 transition-colors
+                      ${darkMode ? 'bg-slate-700 border-slate-600 text-slate-300 hover:bg-slate-600' : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'}`}
+                  >
+                    Generate
+                  </button>
+                </div>
               </div>
               <div>
                 <label className={`text-xs font-medium block mb-1 ${textSecondary}`}>Max uses</label>
@@ -543,7 +595,7 @@ const BillingAdminPage: React.FC<BillingAdminPageProps> = ({ darkMode }) => {
                 />
               </div>
             </div>
-            <div className="flex gap-2">
+            <div className="flex gap-2 flex-wrap">
               <button
                 onClick={createPromo}
                 disabled={creatingPromo || !promoCodeInput.trim()}
@@ -552,7 +604,16 @@ const BillingAdminPage: React.FC<BillingAdminPageProps> = ({ darkMode }) => {
                 {creatingPromo ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />}
                 Create Code
               </button>
-              <button onClick={() => setShowPromoForm(false)} className={`px-3 py-2 rounded-xl text-sm ${darkMode ? 'text-slate-400 hover:text-slate-300' : 'text-slate-500 hover:text-slate-700'}`}>
+              <button
+                type="button"
+                onClick={() => { generateCode(); }}
+                className={`px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2 transition-colors
+                  ${darkMode ? 'bg-slate-700 text-slate-300 hover:bg-slate-600' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}`}
+              >
+                <RefreshCw size={14} />
+                Re-generate
+              </button>
+              <button onClick={() => { setShowPromoForm(false); setPromoMsg(null); }} className={`px-3 py-2 rounded-xl text-sm ${darkMode ? 'text-slate-400 hover:text-slate-300' : 'text-slate-500 hover:text-slate-700'}`}>
                 Cancel
               </button>
             </div>
@@ -571,27 +632,36 @@ const BillingAdminPage: React.FC<BillingAdminPageProps> = ({ darkMode }) => {
         ) : (
           <div className="space-y-2">
             {promoCodes.map(code => (
-              <div key={code.id} className={`flex items-center gap-3 p-3 rounded-xl ${darkMode ? 'bg-slate-800/60' : 'bg-slate-50'}`}>
-                <code className={`font-mono text-sm font-bold flex-1 ${code.is_active ? (darkMode ? 'text-green-400' : 'text-green-700') : (darkMode ? 'text-slate-600 line-through' : 'text-slate-400 line-through')}`}>
+              <div key={code.id} className={`flex items-center gap-3 p-3 rounded-xl flex-wrap ${darkMode ? 'bg-slate-800/60' : 'bg-slate-50'}`}>
+                <code className={`font-mono text-sm font-bold flex-1 min-w-0 truncate ${code.is_active ? (darkMode ? 'text-green-400' : 'text-green-700') : (darkMode ? 'text-slate-600 line-through' : 'text-slate-400 line-through')}`}>
                   {code.code}
                 </code>
-                <span className={`text-xs ${textSecondary}`}>{code.current_uses}/{code.max_uses} uses</span>
+                <span className={`text-xs shrink-0 ${textSecondary}`}>{code.current_uses}/{code.max_uses} uses</span>
                 {code.expires_at && (
-                  <span className={`text-xs hidden sm:inline ${textSecondary}`}>
-                    expires {new Date(code.expires_at).toLocaleDateString()}
+                  <span className={`text-xs hidden sm:inline shrink-0 ${textSecondary}`}>
+                    exp. {new Date(code.expires_at).toLocaleDateString()}
                   </span>
                 )}
-                <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${code.is_active ? 'bg-green-500/10 text-green-500' : (darkMode ? 'bg-slate-700 text-slate-500' : 'bg-slate-200 text-slate-400')}`}>
+                <span className={`text-xs font-semibold px-2 py-0.5 rounded-full shrink-0 ${code.is_active ? 'bg-green-500/10 text-green-500' : (darkMode ? 'bg-slate-700 text-slate-500' : 'bg-slate-200 text-slate-400')}`}>
                   {code.is_active ? 'Active' : 'Inactive'}
                 </span>
                 {code.is_active && (
-                  <button
-                    onClick={() => deactivatePromo(code.id)}
-                    className={`p-1 rounded-lg transition-colors ${darkMode ? 'text-slate-600 hover:text-red-400' : 'text-slate-300 hover:text-red-500'}`}
-                    title="Deactivate"
-                  >
-                    <X size={14} />
-                  </button>
+                  <>
+                    <button
+                      onClick={() => copyCode(code.code)}
+                      className={`p-1.5 rounded-lg transition-colors shrink-0 ${darkMode ? 'text-slate-500 hover:text-slate-300' : 'text-slate-400 hover:text-slate-600'}`}
+                      title="Copy code"
+                    >
+                      <Copy size={13} />
+                    </button>
+                    <button
+                      onClick={() => deactivatePromo(code.id)}
+                      className={`p-1.5 rounded-lg transition-colors shrink-0 ${darkMode ? 'text-slate-600 hover:text-red-400' : 'text-slate-300 hover:text-red-500'}`}
+                      title="Deactivate"
+                    >
+                      <X size={14} />
+                    </button>
+                  </>
                 )}
               </div>
             ))}
