@@ -117,19 +117,39 @@ DO $$ BEGIN
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- ── 6. Auto-founding member trigger ──────────────────────────────────────────
+-- The top 20 users by number of uploaded PUBLIC sheets earn Founding Member
+-- status automatically. Join via email since sheets.uploaded_by stores email.
 CREATE OR REPLACE FUNCTION auto_assign_founding_member()
 RETURNS TRIGGER AS $$
 DECLARE
   founding_count INTEGER;
 BEGIN
-  SELECT COUNT(*) INTO founding_count FROM profiles WHERE is_founding_member = true;
-  IF founding_count < 20 THEN
-    UPDATE profiles
-    SET is_founding_member = true,
-        plan               = 'founding',
-        plan_expires_at    = NULL   -- founding membership never expires
-    WHERE id = NEW.uploaded_by;
+  -- Only react to public sheet uploads
+  IF NOT COALESCE(NEW.is_public, false) THEN
+    RETURN NEW;
   END IF;
+
+  SELECT COUNT(*) INTO founding_count FROM profiles WHERE is_founding_member = true;
+  IF founding_count >= 20 THEN
+    RETURN NEW;
+  END IF;
+
+  -- Grant founding status to anyone currently in the top-20 by public sheet
+  -- count who doesn't already have it. Joined via email.
+  UPDATE profiles p
+  SET is_founding_member = true,
+      plan               = 'founding',
+      plan_expires_at    = NULL
+  WHERE p.email IN (
+    SELECT s.uploaded_by
+    FROM   sheets s
+    WHERE  s.is_public = true
+    GROUP  BY s.uploaded_by
+    ORDER  BY COUNT(*) DESC
+    LIMIT  20
+  )
+  AND p.is_founding_member = false;
+
   RETURN NEW;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;

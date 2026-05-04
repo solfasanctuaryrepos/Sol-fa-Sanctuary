@@ -527,15 +527,20 @@ const PricingPage: React.FC<PricingPageProps> = ({
               <span className="text-amber-500 font-bold text-sm uppercase tracking-wider">Founding Member</span>
             </div>
             <h2 className={`text-2xl font-serif font-bold ${textPrimary}`}>
-              Lock in your rate — forever.
+              Earn your place. Lock in forever.
             </h2>
             <p className={`text-sm leading-relaxed ${textSecondary}`}>
-              The Founding Member tier is a once-in-a-lifetime offer available only during our launch window.
-              You pay the founding rate today and it <strong className={textPrimary}>never increases</strong>, no matter what future pricing looks like.
-              Plus you get a permanent Founding Member badge and priority recognition in the community.
+              The <strong className={textPrimary}>top 20 contributors</strong> by number of uploaded public
+              sheets automatically earn Founding Member status — no payment required. Upload quality sheets,
+              climb the leaderboard, and your spot is yours permanently.
+            </p>
+            <p className={`text-sm leading-relaxed ${textSecondary}`}>
+              Not a top uploader yet? You can still join during our launch window at the founding rate —
+              it <strong className={textPrimary}>never increases</strong>, no matter what future pricing looks like.
+              Admins may also grant founding status via exclusive promo codes.
             </p>
             <div className="flex flex-wrap gap-3 pt-1">
-              {['All Maestro features', 'Permanent Founding badge', 'Rate locked forever', 'Early supporter recognition'].map(b => (
+              {['Top 20 uploaders earn it free', 'All Maestro features', 'Permanent Founding badge', 'Rate locked forever'].map(b => (
                 <span key={b} className={`text-xs font-medium px-3 py-1 rounded-full ${darkMode ? 'bg-amber-900/40 text-amber-400 border border-amber-800/50' : 'bg-amber-100 text-amber-700 border border-amber-200'}`}>
                   {b}
                 </span>
