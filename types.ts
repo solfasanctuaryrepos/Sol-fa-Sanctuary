@@ -1,6 +1,6 @@
 
 export type View = 'home' | 'library' | 'dashboard' | 'admin' | 'about' | 'profile' | 'collections' | 'help' | 'pricing' | 'founding-member' | 'billing-admin' | 'ensemble';
-export type AdminTab = 'users' | 'content' | 'requests';
+export type AdminTab = 'users' | 'content' | 'requests' | 'promos';
 export type DashTab = 'mine' | 'favourites' | 'requests';
 
 export interface SheetRequest {
