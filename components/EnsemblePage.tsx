@@ -127,13 +127,15 @@ const EnsemblePage: React.FC<EnsemblePageProps> = ({
 
   // ── Data fetching ─────────────────────────────────────────────────────────────
   const loadMembers = useCallback(async (orgId: string) => {
-    const { data } = await db
-      .from('org_members')
-      .select('*, profiles(display_name)')
-      .eq('org_id', orgId)
-      .neq('status', 'removed')
-      .order('role');
-    setMembers((data ?? []) as OrgMember[]);
+    // Use SECURITY DEFINER RPC so all active members (not just the owner)
+    // can see the full member list without RLS recursion issues.
+    const { data } = await db.rpc('list_org_members', { org_id_param: orgId });
+    // Reshape the flat RPC result to match the OrgMember shape used in the UI
+    const shaped: OrgMember[] = (data ?? []).map((row: any) => ({
+      ...row,
+      profiles: row.display_name ? { display_name: row.display_name } : null,
+    }));
+    setMembers(shaped);
   }, []);
 
   const loadCollections = useCallback(async (orgId: string) => {
