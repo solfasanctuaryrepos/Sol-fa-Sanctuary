@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Download, Share2, Eye, Calendar, User, FileText, Music as MusicIcon, X, ExternalLink, Menu, ChevronUp, Loader2, AlertTriangle, AlertCircle, Heart, FolderPlus, Trash2, MessageSquare, Send, CornerDownRight, ChevronDown, ChevronRight, Lock, Zap } from 'lucide-react';
+import { Download, Share2, Eye, Calendar, User, FileText, Music as MusicIcon, X, ExternalLink, Menu, ChevronUp, Loader2, AlertTriangle, AlertCircle, Heart, FolderPlus, Trash2, MessageSquare, Send, CornerDownRight, ChevronDown, ChevronRight, Lock, Zap, ChevronLeft, AlignJustify, Layers } from 'lucide-react';
 import { MusicSheet, Comment, Collection } from '../types';
 import { db } from '../supabase';
 import { getPdfUrl } from '../utils/signedUrl';
@@ -62,6 +62,7 @@ interface LazyPdfPageProps {
   darkMode: boolean;
   sheetTitle: string;
   isFirstPage: boolean;
+  eager?: boolean;
 }
 
 const LazyPdfPage: React.FC<LazyPdfPageProps> = ({
@@ -71,14 +72,15 @@ const LazyPdfPage: React.FC<LazyPdfPageProps> = ({
   darkMode,
   sheetTitle,
   isFirstPage,
+  eager,
 }) => {
-  const [isIntersecting, setIsIntersecting] = useState(isFirstPage);
+  const [isIntersecting, setIsIntersecting] = useState(isFirstPage || !!eager);
   const [imgUrl, setImgUrl] = useState<string | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const hasQueued = useRef(false);
 
   useEffect(() => {
-    if (isFirstPage || forceRender) return;
+    if (isFirstPage || forceRender || eager) return;
     const observer = new IntersectionObserver(
       ([entry]) => {
         if (entry.isIntersecting) {
@@ -90,7 +92,7 @@ const LazyPdfPage: React.FC<LazyPdfPageProps> = ({
     );
     if (containerRef.current) observer.observe(containerRef.current);
     return () => observer.disconnect();
-  }, [isFirstPage, forceRender]);
+  }, [isFirstPage, forceRender, eager]);
 
   useEffect(() => {
     if (!pdfDoc || (!isIntersecting && !forceRender)) return;
@@ -881,6 +883,14 @@ const FullPreviewPage: React.FC<FullPreviewPageProps> = ({
   const collectionDropRef = useRef<HTMLDivElement>(null);
   const commentsSectionRef = useRef<HTMLDivElement>(null);
 
+  // View mode: 'flow' (default desktop) | 'single' (default mobile)
+  const [viewMode, setViewMode] = useState<'flow' | 'single'>(() => {
+    try { return (localStorage.getItem('sheetViewMode') as 'flow' | 'single') ?? (window.innerWidth < 768 ? 'single' : 'flow'); }
+    catch { return 'flow'; }
+  });
+  const [currentPage, setCurrentPage] = useState(1);
+  const touchStartX = useRef<number>(0);
+
   const scrollToComments = () => {
     commentsSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
@@ -905,6 +915,30 @@ const FullPreviewPage: React.FC<FullPreviewPageProps> = ({
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
   }, []);
+
+  // Persist view mode
+  useEffect(() => {
+    try { localStorage.setItem('sheetViewMode', viewMode); } catch {}
+  }, [viewMode]);
+
+  // Reset to page 1 when sheet changes
+  useEffect(() => { setCurrentPage(1); }, [sheet?.id]);
+
+  // Keyboard navigation in single mode
+  useEffect(() => {
+    if (viewMode !== 'single') return;
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
+        e.preventDefault();
+        setCurrentPage(p => Math.min(p + 1, numPages || 1));
+      } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+        e.preventDefault();
+        setCurrentPage(p => Math.max(p - 1, 1));
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [viewMode, numPages]);
 
   // Blob URL created from the fetched PDF — revoked on sheet change / unmount.
   const blobUrlRef = useRef<string | null>(null);
@@ -1205,6 +1239,20 @@ const FullPreviewPage: React.FC<FullPreviewPageProps> = ({
     setShowCollectionDropdown(prev => !prev);
   };
 
+  const toggleViewMode = () => setViewMode(m => m === 'flow' ? 'single' : 'flow');
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    touchStartX.current = e.touches[0].clientX;
+  };
+  const handleTouchEnd = (e: React.TouchEvent) => {
+    if (viewMode !== 'single') return;
+    const delta = touchStartX.current - e.changedTouches[0].clientX;
+    if (Math.abs(delta) > 50) {
+      if (delta > 0) setCurrentPage(p => Math.min(p + 1, numPages || 1));
+      else setCurrentPage(p => Math.max(p - 1, 1));
+    }
+  };
+
   if (!sheet) return null;
 
   const textPrimary = darkMode ? 'text-slate-100' : 'text-slate-900';
@@ -1293,6 +1341,17 @@ const FullPreviewPage: React.FC<FullPreviewPageProps> = ({
               )}
             </div>
           </div>
+
+          {/* View mode toggle */}
+          {numPages > 0 && (
+            <button
+              onClick={toggleViewMode}
+              title={viewMode === 'flow' ? 'Switch to single-page view' : 'Switch to flow view'}
+              className={`p-2 rounded-lg transition-colors shrink-0 ${darkMode ? 'text-slate-400 hover:text-white' : 'text-slate-500 hover:text-slate-900'}`}
+            >
+              {viewMode === 'flow' ? <Layers size={20} /> : <AlignJustify size={20} />}
+            </button>
+          )}
 
           {/* Mobile menu toggle (below md) */}
           <button onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
@@ -1424,7 +1483,65 @@ const FullPreviewPage: React.FC<FullPreviewPageProps> = ({
                   Retry
                 </button>
               </div>
+            ) : viewMode === 'single' ? (
+              /* ── Single-page view ─────────────────────────────────── */
+              <div
+                className="relative select-none"
+                onTouchStart={handleTouchStart}
+                onTouchEnd={handleTouchEnd}
+              >
+                {numPages > 0 ? (
+                  <>
+                    {/* Render current ± 1 pages; hide non-active with CSS */}
+                    <div className="p-2 md:p-4">
+                      {Array.from({ length: numPages }).map((_, i) => (
+                        <div key={i} className={currentPage === i + 1 ? 'block' : 'hidden'}>
+                          <LazyPdfPage
+                            index={i + 1}
+                            pdfDoc={pdfDoc}
+                            forceRender={isPrinting}
+                            darkMode={darkMode}
+                            sheetTitle={sheet.title}
+                            isFirstPage={i === 0}
+                            eager={Math.abs(currentPage - (i + 1)) <= 1}
+                          />
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Navigation bar */}
+                    <div className={`flex items-center justify-between px-4 py-3 border-t ${darkMode ? 'border-slate-800' : 'border-slate-100'}`}>
+                      <button
+                        onClick={() => setCurrentPage(p => Math.max(p - 1, 1))}
+                        disabled={currentPage <= 1}
+                        className={`flex items-center gap-1 px-3 py-1.5 rounded-lg text-sm font-semibold transition-all active:scale-95 disabled:opacity-30 disabled:cursor-not-allowed ${darkMode ? 'bg-slate-800 text-slate-300 hover:bg-slate-700' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}`}
+                      >
+                        <ChevronLeft size={16} /> Prev
+                      </button>
+
+                      {/* Page indicator */}
+                      <span className={`text-sm font-bold tabular-nums ${textPrimary}`}>
+                        {currentPage} <span className={`font-normal ${textSecondary}`}>/ {numPages}</span>
+                      </span>
+
+                      <button
+                        onClick={() => setCurrentPage(p => Math.min(p + 1, numPages))}
+                        disabled={currentPage >= numPages}
+                        className={`flex items-center gap-1 px-3 py-1.5 rounded-lg text-sm font-semibold transition-all active:scale-95 disabled:opacity-30 disabled:cursor-not-allowed ${darkMode ? 'bg-slate-800 text-slate-300 hover:bg-slate-700' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}`}
+                      >
+                        Next <ChevronRight size={16} />
+                      </button>
+                    </div>
+                  </>
+                ) : (
+                  <div className="py-20 text-center no-print">
+                    <AlertTriangle className="mx-auto text-amber-500 mb-2" size={32} />
+                    <p className={textSecondary}>Harmony disrupted. Unable to display score.</p>
+                  </div>
+                )}
+              </div>
             ) : (
+              /* ── Flow view (continuous scroll) ───────────────────── */
               <div className="flex flex-col gap-2 sm:gap-4 p-2 md:p-4 bg-slate-200/5">
                 {numPages > 0 ? (
                   Array.from({ length: numPages }).map((_, i) => (
