@@ -11,7 +11,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import {
-  CheckCircle2, XCircle, Zap, Star, Users, Shield, WifiOff,
+  CheckCircle2, XCircle, Zap, Users, Shield, WifiOff,
   Download, MessageSquarePlus, Sparkles, Crown, Tag, Loader2,
   ArrowRight, Info, X, RefreshCw, Bell,
 } from 'lucide-react';
@@ -85,11 +85,15 @@ async function callEdgeFn(path: string, body: object): Promise<{ data?: unknown;
 // ── Plan card ─────────────────────────────────────────────────────────────────
 interface PlanCardProps {
   plan: Exclude<Plan, 'free'>;
+  altPlan?: Exclude<Plan, 'free'>;          // yearly variant when hasBillingToggle
+  hasBillingToggle?: boolean;
+  billingPeriod?: 'monthly' | 'yearly';
+  onBillingPeriodChange?: (p: 'monthly' | 'yearly') => void;
   label: string;
   tagline: string;
   icon: React.ReactNode;
-  accentClass: string;       // e.g. 'text-green-500'
-  borderClass: string;       // e.g. 'border-green-500/40'
+  accentClass: string;
+  borderClass: string;
   isCurrent: boolean;
   isPopular?: boolean;
   region: 'local' | 'international';
@@ -101,10 +105,13 @@ interface PlanCardProps {
 }
 
 const PlanCard: React.FC<PlanCardProps> = ({
-  plan, label, tagline, icon, accentClass, borderClass, isCurrent,
+  plan, altPlan, hasBillingToggle, billingPeriod = 'monthly', onBillingPeriodChange,
+  label, tagline, icon, accentClass, borderClass, isCurrent,
   isPopular, region, onUpgrade, loading, darkMode, billingActive, highlights,
 }) => {
-  const price = PRICES[plan][region];
+  // When the toggle is active, use the yearly plan's pricing & upgrade target
+  const effectivePlan = (hasBillingToggle && billingPeriod === 'yearly' && altPlan) ? altPlan : plan;
+  const price = PRICES[effectivePlan][region];
   const cardBg = darkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200 shadow-sm';
   const popular = isPopular && !isCurrent;
 
@@ -129,6 +136,30 @@ const PlanCard: React.FC<PlanCardProps> = ({
         </div>
       )}
 
+      {/* Monthly / Yearly toggle */}
+      {hasBillingToggle && (
+        <div className={`flex self-start rounded-lg p-0.5 text-xs font-semibold ${darkMode ? 'bg-slate-800' : 'bg-slate-100'}`}>
+          {(['monthly', 'yearly'] as const).map(p => (
+            <button
+              key={p}
+              onClick={() => onBillingPeriodChange?.(p)}
+              className={`px-3 py-1 rounded-md transition-all capitalize ${
+                billingPeriod === p
+                  ? (darkMode ? 'bg-slate-600 text-slate-100 shadow' : 'bg-white text-slate-900 shadow-sm')
+                  : (darkMode ? 'text-slate-400 hover:text-slate-200' : 'text-slate-500 hover:text-slate-700')
+              }`}
+            >
+              {p}
+              {p === 'yearly' && (
+                <span className={`ml-1 font-bold ${billingPeriod === 'yearly' ? 'text-green-500' : (darkMode ? 'text-slate-500' : 'text-slate-400')}`}>
+                  · Save
+                </span>
+              )}
+            </button>
+          ))}
+        </div>
+      )}
+
       {/* Icon + title */}
       <div className="flex items-start gap-3">
         <div className={`p-2 rounded-xl ${isCurrent ? 'bg-current/10' : (darkMode ? 'bg-slate-800' : 'bg-slate-100')}`}>
@@ -148,10 +179,10 @@ const PlanCard: React.FC<PlanCardProps> = ({
         <span className={`text-sm ml-1 ${darkMode ? 'text-slate-500' : 'text-slate-500'}`}>
           {price.interval === 'monthly' ? '/month' : price.interval === 'yearly' ? '/year' : ''}
         </span>
-        {plan === 'maestro_yearly' && (
+        {effectivePlan === 'maestro_yearly' && (
           <p className="text-xs text-green-500 font-medium mt-0.5">{annualSavingsLabel(region)}</p>
         )}
-        {plan === 'founding' && (
+        {effectivePlan === 'founding' && (
           <p className="text-xs text-amber-500 font-medium mt-0.5">Locked in forever</p>
         )}
       </div>
@@ -173,7 +204,7 @@ const PlanCard: React.FC<PlanCardProps> = ({
         </div>
       ) : billingActive ? (
         <button
-          onClick={() => onUpgrade(plan)}
+          onClick={() => onUpgrade(effectivePlan)}
           disabled={loading}
           className="w-full py-2.5 rounded-xl text-sm font-bold transition-all flex items-center justify-center gap-2 bg-green-500 text-slate-950 hover:bg-green-400 active:scale-95 disabled:opacity-60"
         >
@@ -207,6 +238,7 @@ const PricingPage: React.FC<PricingPageProps> = ({
 
   const [checkoutLoading, setCheckoutLoading] = useState<Plan | null>(null);
   const [checkoutError, setCheckoutError] = useState<string | null>(null);
+  const [maestroBilling, setMaestroBilling] = useState<'monthly' | 'yearly'>('monthly');
 
   // Payment return verification
   const [verifying, setVerifying] = useState(false);
@@ -288,6 +320,8 @@ const PricingPage: React.FC<PricingPageProps> = ({
 
   const planConfig: Array<{
     plan: Exclude<Plan, 'free'>;
+    altPlan?: Exclude<Plan, 'free'>;
+    hasBillingToggle?: boolean;
     label: string;
     tagline: string;
     icon: React.ReactNode;
@@ -298,22 +332,15 @@ const PricingPage: React.FC<PricingPageProps> = ({
   }> = [
     {
       plan: 'maestro_monthly',
+      altPlan: 'maestro_yearly',
+      hasBillingToggle: true,
       label: 'Maestro',
-      tagline: 'Month-to-month flexibility',
+      tagline: 'Unlimited access, your way',
       icon: <Zap size={20} />,
-      accentClass: 'text-blue-500',
-      borderClass: 'border-blue-500/40',
-      highlights: ['Unlimited downloads', 'Offline viewing', 'Submit & vote requests', 'Ad-free'],
-    },
-    {
-      plan: 'maestro_yearly',
-      label: 'Maestro Yearly',
-      tagline: 'Best value for individuals',
-      icon: <Star size={20} />,
       accentClass: 'text-green-500',
       borderClass: 'border-green-500/40',
       isPopular: true,
-      highlights: ['Everything in Maestro', `Save ${annualSavingsLabel(region).replace('Save ', '')}`, 'Full access for a full year', 'Priority support'],
+      highlights: ['Unlimited downloads', 'Offline viewing', 'Submit & vote requests', 'Ad-free experience'],
     },
     {
       plan: 'ensemble',
@@ -471,11 +498,17 @@ const PricingPage: React.FC<PricingPageProps> = ({
               key={cfg.plan}
               {...cfg}
               region={region}
-              isCurrent={currentPlan === cfg.plan && !ent.isFounding}
+              isCurrent={
+                cfg.hasBillingToggle
+                  ? (currentPlan === 'maestro_monthly' || currentPlan === 'maestro_yearly') && !ent.isFounding
+                  : currentPlan === cfg.plan && !ent.isFounding
+              }
               onUpgrade={handleUpgrade}
-              loading={checkoutLoading === cfg.plan}
+              loading={checkoutLoading === cfg.plan || checkoutLoading === cfg.altPlan}
               darkMode={darkMode}
               billingActive={ent.billingActive}
+              billingPeriod={cfg.hasBillingToggle ? maestroBilling : undefined}
+              onBillingPeriodChange={cfg.hasBillingToggle ? setMaestroBilling : undefined}
             />
           ))}
         </div>
