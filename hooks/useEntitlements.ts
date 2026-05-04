@@ -31,6 +31,11 @@ export interface Entitlements {
   pricingRegion: PricingRegion;
   currency: BillingCurrency;
 
+  // ── Ensemble org ───────────────────────────────────────────────────────────
+  /** UUID of the org this user belongs to (owner or active member) */
+  orgId: string | null;
+  orgRole: 'owner' | 'admin' | 'member' | null;
+
   // ── Feature flags ──────────────────────────────────────────────────────────
   /** Unlimited downloads (paid plan, OR billing not yet active) */
   canDownloadUnlimited: boolean;
@@ -42,12 +47,12 @@ export interface Entitlements {
   hasOfflineAccess: boolean;
   /** Can submit requests and vote (viewing is always open) */
   hasRequestAccess: boolean;
-  /** Ensemble team features */
+  /** Ensemble team features (personal ensemble plan OR active org membership) */
   hasTeamFeatures: boolean;
   teamSeats: number;
 }
 
-const FULL_ACCESS: Omit<Entitlements, 'loaded' | 'billingActive' | 'plan' | 'isActive' | 'isFounding' | 'pricingRegion' | 'currency'> = {
+const FULL_ACCESS: Omit<Entitlements, 'loaded' | 'billingActive' | 'plan' | 'isActive' | 'isFounding' | 'pricingRegion' | 'currency' | 'orgId' | 'orgRole'> = {
   canDownloadUnlimited:  true,
   monthlyDownloadLimit:  999999,
   showAds:               false,
@@ -61,6 +66,15 @@ function isPaid(plan: Plan): boolean {
   return ['maestro_monthly', 'maestro_yearly', 'ensemble', 'founding'].includes(plan);
 }
 
+interface OrgMembership {
+  org_id: string;
+  role: 'owner' | 'admin' | 'member';
+  organisations: {
+    plan: string;
+    plan_expires_at: string | null;
+  } | null;
+}
+
 function buildEntitlements(
   plan: Plan,
   planExpiresAt: string | null,
@@ -68,6 +82,7 @@ function buildEntitlements(
   pricingRegion: PricingRegion,
   currency: BillingCurrency,
   billingActive: boolean,
+  orgMembership: OrgMembership | null,
 ): Entitlements {
   // Pre-launch: full access for everyone
   if (!billingActive) {
@@ -79,23 +94,36 @@ function buildEntitlements(
       isFounding,
       pricingRegion,
       currency,
+      orgId:   orgMembership?.org_id   ?? null,
+      orgRole: (orgMembership?.role as Entitlements['orgRole']) ?? null,
       ...FULL_ACCESS,
     };
   }
 
   // Founding members are locked in forever — ignore any stale plan_expires_at value
-  const expired    = isFounding ? false : (planExpiresAt ? new Date(planExpiresAt) < new Date() : false);
-  const effectPlan = expired ? 'free' : plan;
+  const personalExpired = isFounding ? false : (planExpiresAt ? new Date(planExpiresAt) < new Date() : false);
+  const effectPersonal  = personalExpired ? 'free' : plan;
+
+  // Org membership path — members inherit ensemble features from the org
+  const orgPlan        = orgMembership?.organisations?.plan ?? null;
+  const orgExpiry      = orgMembership?.organisations?.plan_expires_at ?? null;
+  const orgExpired     = orgExpiry ? new Date(orgExpiry) < new Date() : false;
+  const effectOrgPlan  = (orgPlan === 'ensemble' && !orgExpired) ? 'ensemble' : null;
+
+  // Best of personal or org plan
+  const effectPlan = effectOrgPlan ?? effectPersonal;
   const paid       = isPaid(effectPlan);
 
   return {
     loaded: true,
     billingActive: true,
-    plan: effectPlan,
-    isActive: !expired,
+    plan: effectPersonal,   // personal plan shown separately from org
+    isActive: !personalExpired,
     isFounding,
     pricingRegion,
     currency,
+    orgId:   orgMembership?.org_id   ?? null,
+    orgRole: (orgMembership?.role as Entitlements['orgRole']) ?? null,
 
     canDownloadUnlimited:  paid,
     monthlyDownloadLimit:  paid ? 999999 : 3,
@@ -115,6 +143,8 @@ const DEFAULT_ENTITLEMENTS: Entitlements = {
   isFounding:           false,
   pricingRegion:        'international',
   currency:             'USD',
+  orgId:                null,
+  orgRole:              null,
   ...FULL_ACCESS,
 };
 
@@ -130,11 +160,11 @@ export function useEntitlements(userId: string | null): Entitlements {
         .eq('id', 1)
         .single();
       const billingActive = cfg?.billing_active ?? false;
-      setState(buildEntitlements('free', null, false, 'international', 'USD', billingActive));
+      setState(buildEntitlements('free', null, false, 'international', 'USD', billingActive, null));
       return;
     }
 
-    const [profileRes, configRes] = await Promise.all([
+    const [profileRes, configRes, orgRes] = await Promise.all([
       db.from('profiles')
         .select('plan, plan_expires_at, is_founding_member, pricing_region, currency')
         .eq('id', userId)
@@ -143,13 +173,20 @@ export function useEntitlements(userId: string | null): Entitlements {
         .select('billing_active')
         .eq('id', 1)
         .single(),
+      db.from('org_members')
+        .select('org_id, role, organisations(plan, plan_expires_at)')
+        .eq('user_id', userId)
+        .eq('status', 'active')
+        .limit(1)
+        .maybeSingle(),
     ]);
 
-    const profile      = profileRes.data;
+    const profile       = profileRes.data;
     const billingActive = configRes.data?.billing_active ?? false;
+    const orgMembership = orgRes.data as OrgMembership | null;
 
     if (!profile) {
-      setState(buildEntitlements('free', null, false, 'international', 'USD', billingActive));
+      setState(buildEntitlements('free', null, false, 'international', 'USD', billingActive, orgMembership));
       return;
     }
 
@@ -160,6 +197,7 @@ export function useEntitlements(userId: string | null): Entitlements {
       (profile.pricing_region as PricingRegion) ?? 'international',
       (profile.currency as BillingCurrency) ?? 'USD',
       billingActive,
+      orgMembership,
     ));
   }, [userId]);
 

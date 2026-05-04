@@ -1,7 +1,8 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Home, Music, LayoutDashboard, ShieldAlert, Moon, Sun, LogOut, LogIn, Info, HelpCircle, Zap, Download } from 'lucide-react';
+import { Home, Music, LayoutDashboard, ShieldAlert, Moon, Sun, LogOut, LogIn, Info, HelpCircle, Zap, Download, Users } from 'lucide-react';
 import { View } from '../types';
+import { useEntitlementsContext } from '../contexts/EntitlementsContext';
 
 interface NavbarProps {
   activeView: View;
@@ -21,6 +22,7 @@ interface NavbarProps {
 const Navbar: React.FC<NavbarProps> = ({ activeView, onViewChange, currentUser, onLogout, onLogin, darkMode, onThemeToggle, onShowShortcuts, onOpenPricing, canInstall, onInstall }) => {
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+  const ent = useEntitlementsContext();
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -116,6 +118,12 @@ const Navbar: React.FC<NavbarProps> = ({ activeView, onViewChange, currentUser, 
                     <LayoutDashboard size={16} />
                     Dashboard
                   </button>
+                  {(ent.hasTeamFeatures || ent.orgId) && (
+                    <button onClick={() => { onViewChange('ensemble'); setShowProfileMenu(false); }} className={`w-full flex items-center gap-3 px-4 py-2 text-sm transition-colors ${activeView === 'ensemble' ? 'text-green-500' : (darkMode ? 'text-slate-300 hover:bg-slate-800' : 'text-slate-700 hover:bg-slate-50')}`}>
+                      <Users size={16} />
+                      Ensemble Workspace
+                    </button>
+                  )}
                   <button onClick={() => { onViewChange('help'); setShowProfileMenu(false); }} className={`w-full flex items-center gap-3 px-4 py-2 text-sm transition-colors ${darkMode ? 'text-slate-300 hover:bg-slate-800' : 'text-slate-700 hover:bg-slate-50'}`}>
                     <HelpCircle size={16} />
                     Help &amp; FAQ

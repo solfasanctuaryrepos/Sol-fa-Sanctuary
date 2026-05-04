@@ -1,5 +1,5 @@
 
-export type View = 'home' | 'library' | 'dashboard' | 'admin' | 'about' | 'profile' | 'collections' | 'help' | 'pricing' | 'founding-member' | 'billing-admin';
+export type View = 'home' | 'library' | 'dashboard' | 'admin' | 'about' | 'profile' | 'collections' | 'help' | 'pricing' | 'founding-member' | 'billing-admin' | 'ensemble';
 export type AdminTab = 'users' | 'content' | 'requests';
 export type DashTab = 'mine' | 'favourites' | 'requests';
 
@@ -83,6 +83,43 @@ export interface MusicSheet {
   thumbnailUrl: string;
   pdfUrl: string;
   uploadedBy: string;
+}
+
+// ── Ensemble workspace types ──────────────────────────────────────────────────
+
+export interface Organisation {
+  id: string;
+  name: string;
+  owner_id: string;
+  plan: 'ensemble';
+  plan_expires_at: string | null;
+  max_seats: number;
+  created_at: string;
+}
+
+export interface OrgMember {
+  id: string;
+  org_id: string;
+  user_id: string | null;
+  email: string;
+  role: 'owner' | 'admin' | 'member';
+  status: 'pending' | 'active' | 'removed';
+  invited_by: string | null;
+  invited_at: string;
+  joined_at: string | null;
+  /** Joined from profiles */
+  profiles?: { display_name: string | null } | null;
+}
+
+export interface OrgCollection {
+  id: string;
+  org_id: string;
+  name: string;
+  description: string | null;
+  created_by: string;
+  created_at: string;
+  /** Sheet count — populated when fetched with org_collection_sheets(count) */
+  sheetCount?: number;
 }
 
 export interface User {

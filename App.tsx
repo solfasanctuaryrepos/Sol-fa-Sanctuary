@@ -26,6 +26,7 @@ import { EntitlementsProvider } from './contexts/EntitlementsContext';
 import PricingPage from './components/PricingPage';
 import FoundingMemberBanner from './components/FoundingMemberBanner';
 import BillingAdminPage from './components/BillingAdminPage';
+import EnsemblePage from './components/EnsemblePage';
 
 interface SupabaseUser {
   id: string;
@@ -97,7 +98,7 @@ const App: React.FC = () => {
 
   // Views that are meaningful to restore on refresh.
   // 'profile' and 'collections' are contextual (need extra state) — they reset to home.
-  const HASHABLE_VIEWS: View[] = ['library', 'dashboard', 'admin', 'about', 'help', 'pricing', 'billing-admin'];
+  const HASHABLE_VIEWS: View[] = ['library', 'dashboard', 'admin', 'about', 'help', 'pricing', 'billing-admin', 'ensemble'];
 
   // Sync current view → URL hash so the page survives a refresh.
   useEffect(() => {
@@ -559,6 +560,15 @@ const App: React.FC = () => {
         return currentUser?.role === 'admin' ? (
           <BillingAdminPage darkMode={darkMode} />
         ) : null;
+      case 'ensemble':
+        return (
+          <EnsemblePage
+            darkMode={darkMode}
+            currentUser={currentUser}
+            onAuthRequired={() => setIsAuthModalOpen(true)}
+            onOpenPricing={() => setCurrentView('pricing')}
+          />
+        );
       default:
         return <LandingPage
           onUploadClick={currentUser ? () => setIsUploadModalOpen(true) : handleOpenLogin}
