@@ -303,17 +303,26 @@ const PricingPage: React.FC<PricingPageProps> = ({
     setCheckoutError(null);
     setCheckoutLoading(plan);
 
+    // Open a blank tab NOW while we still have the user gesture.
+    // After await the gesture context is lost — window.open(_blank) would
+    // either be blocked or (in Chrome) navigate BOTH the new and current tab.
+    const paymentTab = window.open('', '_blank');
+
     const { data, error } = await callEdgeFn('billing-checkout', { plan });
     setCheckoutLoading(null);
 
-    if (error) { setCheckoutError(error); return; }
+    if (error) {
+      paymentTab?.close();
+      setCheckoutError(error);
+      return;
+    }
     const { checkoutUrl } = data as { checkoutUrl: string };
 
-    const newTab = window.open(checkoutUrl, '_blank', 'noopener');
-    if (newTab) {
+    if (paymentTab) {
+      paymentTab.location.href = checkoutUrl;
       setPaymentWindowOpen(true);
     } else {
-      // Popup blocked (mobile Safari etc.) — fall back to same-tab redirect
+      // Popup blocked — fall back to same-tab redirect
       window.location.href = checkoutUrl;
     }
   };
