@@ -77,13 +77,18 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, darkMode, recove
         });
         if (err) throw err;
         if (data.user) {
-          // Persist profile row early so display_name is saved
-          await db.from('profiles').upsert({
-            id: data.user.id,
-            email: data.user.email,
-            display_name: displayName,
-            role: data.user.email === 'solfasanctuary@gmail.com' ? 'admin' : 'user',
-          });
+          // Only upsert profile if session exists (email-confirmed users).
+          // When email confirmation is required, data.session is null and
+          // auth.uid() is unavailable → INSERT RLS would fail with 401.
+          // App.tsx creates the profile on first login using user_metadata.display_name.
+          if (data.session) {
+            await db.from('profiles').upsert({
+              id: data.user.id,
+              email: data.user.email,
+              display_name: displayName,
+              role: data.user.email === 'solfasanctuary@gmail.com' ? 'admin' : 'user',
+            });
+          }
           setSuccessMsg(`Almost there! We sent a verification link to ${email}. Click it to activate your account.`);
         }
       } else if (mode === 'signin') {

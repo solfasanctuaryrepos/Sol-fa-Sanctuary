@@ -307,7 +307,8 @@ const App: React.FC = () => {
       // Create profile row if missing — covers OAuth sign-ins (Google etc.)
       // which bypass the AuthModal signup form that normally creates it.
       if (!profile) {
-        const displayName = (user as any).user_metadata?.full_name
+        const displayName = (user as any).user_metadata?.display_name
+          || (user as any).user_metadata?.full_name
           || (user as any).user_metadata?.name
           || user.email.split('@')[0];
         await db.from('profiles').upsert({
