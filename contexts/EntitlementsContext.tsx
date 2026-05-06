@@ -20,17 +20,9 @@ export const EntitlementsProvider: React.FC<{
   userId: string | null;
   children: React.ReactNode;
 }> = ({ userId, children }) => {
-  // A counter bump forces useEntitlements to re-fetch by changing the userId dep key
-  const [epoch, setEpoch] = useState(0);
-
-  // We pass a compound key so changing epoch triggers a re-fetch
-  const effectiveId = userId ? `${userId}:${epoch}` : null;
-
-  // Strip the epoch suffix before passing to Supabase query
-  const rawId = effectiveId ? effectiveId.split(':')[0] : null;
-  const entitlements = useEntitlements(rawId);
-
-  const refresh = useCallback(() => setEpoch(e => e + 1), []);
+  const [refreshKey, setRefreshKey] = useState(0);
+  const entitlements = useEntitlements(userId, refreshKey);
+  const refresh = useCallback(() => setRefreshKey(k => k + 1), []);
 
   return (
     <EntitlementsContext.Provider value={{ ...entitlements, refresh }}>

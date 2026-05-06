@@ -148,7 +148,7 @@ const DEFAULT_ENTITLEMENTS: Entitlements = {
   ...FULL_ACCESS,
 };
 
-export function useEntitlements(userId: string | null): Entitlements {
+export function useEntitlements(userId: string | null, refreshKey: number = 0): Entitlements {
   const [state, setState] = useState<Entitlements>(DEFAULT_ENTITLEMENTS);
 
   const fetch = useCallback(async () => {
@@ -199,7 +199,7 @@ export function useEntitlements(userId: string | null): Entitlements {
       billingActive,
       orgMembership,
     ));
-  }, [userId]);
+  }, [userId, refreshKey]);
 
   useEffect(() => { fetch(); }, [fetch]);
 
