@@ -243,6 +243,19 @@ const PricingPage: React.FC<PricingPageProps> = ({
   const [checkoutLoading, setCheckoutLoading] = useState<Plan | null>(null);
   const [checkoutError, setCheckoutError] = useState<string | null>(null);
   const [maestroBilling, setMaestroBilling] = useState<'monthly' | 'yearly'>('monthly');
+  const [paymentWindowOpen, setPaymentWindowOpen] = useState(false);
+
+  // Auto-refresh entitlements when user returns to tab after paying in new tab
+  useEffect(() => {
+    if (!paymentWindowOpen) return;
+    const handleFocus = () => { ent.refresh(); };
+    document.addEventListener('visibilitychange', handleFocus);
+    window.addEventListener('focus', handleFocus);
+    return () => {
+      document.removeEventListener('visibilitychange', handleFocus);
+      window.removeEventListener('focus', handleFocus);
+    };
+  }, [paymentWindowOpen, ent]);
 
   // Payment return verification
   const [verifying, setVerifying] = useState(false);
@@ -295,7 +308,14 @@ const PricingPage: React.FC<PricingPageProps> = ({
 
     if (error) { setCheckoutError(error); return; }
     const { checkoutUrl } = data as { checkoutUrl: string };
-    window.location.href = checkoutUrl;
+
+    const newTab = window.open(checkoutUrl, '_blank', 'noopener');
+    if (newTab) {
+      setPaymentWindowOpen(true);
+    } else {
+      // Popup blocked (mobile Safari etc.) — fall back to same-tab redirect
+      window.location.href = checkoutUrl;
+    }
   };
 
   // ── Promo code ────────────────────────────────────────────────────────────────
@@ -518,6 +538,15 @@ const PricingPage: React.FC<PricingPageProps> = ({
           ))}
         </div>
 
+        {paymentWindowOpen && (
+          <div className={`flex items-center gap-3 rounded-xl border px-4 py-3 mt-4 text-sm font-medium ${darkMode ? 'bg-amber-950/30 border-amber-700/40 text-amber-300' : 'bg-amber-50 border-amber-200 text-amber-800'}`}>
+            <Loader2 size={16} className="animate-spin shrink-0" />
+            <span>Payment opened in a new tab — complete it there, then return here. Your plan updates automatically.</span>
+            <button onClick={() => setPaymentWindowOpen(false)} className="ml-auto shrink-0 opacity-60 hover:opacity-100 transition-opacity">
+              <X size={16} />
+            </button>
+          </div>
+        )}
         {checkoutError && (
           <p className="text-center text-sm text-red-500 mt-4">{checkoutError}</p>
         )}
