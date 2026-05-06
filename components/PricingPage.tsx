@@ -579,11 +579,6 @@ const PricingPage: React.FC<PricingPageProps> = ({
               sheets automatically earn Founding Member status — no payment required. Upload quality sheets,
               climb the leaderboard, and your spot is yours permanently.
             </p>
-            <p className={`text-sm leading-relaxed ${textSecondary}`}>
-              Not a top uploader yet? You can still join during our launch window at the founding rate —
-              it <strong className={textPrimary}>never increases</strong>, no matter what future pricing looks like.
-              Admins may also grant founding status via exclusive promo codes.
-            </p>
             <div className="flex flex-wrap gap-3 pt-1">
               {['Top 20 uploaders earn it free', 'All Maestro features', 'Permanent Founding badge', 'Rate locked forever'].map(b => (
                 <span key={b} className={`text-xs font-medium px-3 py-1 rounded-full ${darkMode ? 'bg-amber-900/40 text-amber-400 border border-amber-800/50' : 'bg-amber-100 text-amber-700 border border-amber-200'}`}>
@@ -607,32 +602,24 @@ const PricingPage: React.FC<PricingPageProps> = ({
               <p className="text-xs text-amber-500 font-medium mt-1">Locked in forever</p>
             </div>
 
-            {ent.isFounding ? (
+            {ent.plan === 'founding' ? (
               <div className="flex items-center justify-center gap-2 py-2">
                 <CheckCircle2 size={16} className="text-amber-500" />
                 <span className="text-sm font-semibold text-amber-500">You're a Founding Member!</span>
               </div>
-            ) : ent.billingActive ? (
+            ) : ent.isFounding ? (
               <button
                 onClick={() => handleUpgrade('founding')}
                 disabled={checkoutLoading !== null}
                 className="w-full py-3 rounded-xl text-sm font-bold flex items-center justify-center gap-2 transition-all bg-amber-500 text-slate-950 hover:bg-amber-400 active:scale-95 disabled:opacity-60"
               >
                 {checkoutLoading === 'founding' ? <Loader2 size={16} className="animate-spin" /> : <Sparkles size={16} />}
-                {checkoutLoading === 'founding' ? 'Redirecting…' : 'Become a Founding Member'}
+                {checkoutLoading === 'founding' ? 'Redirecting…' : 'Activate Founding Membership'}
               </button>
             ) : (
-              <a
-                href="mailto:solfasanctuary@gmail.com?subject=Notify me when Founding Member launches"
-                className={`w-full py-3 rounded-xl text-sm font-bold flex items-center justify-center gap-2 transition-all border
-                  ${darkMode
-                    ? 'border-amber-800/60 text-amber-500 hover:border-amber-700 hover:bg-amber-950/30'
-                    : 'border-amber-200 text-amber-600 hover:border-amber-300 hover:bg-amber-50'
-                  }`}
-              >
-                <Bell size={16} />
-                Get notified at launch
-              </a>
+              <p className={`text-center text-xs ${darkMode ? 'text-amber-600' : 'text-amber-500'}`}>
+                Available by invite only — redeem a promo code below.
+              </p>
             )}
           </div>
         </div>
@@ -645,7 +632,7 @@ const PricingPage: React.FC<PricingPageProps> = ({
           <h3 className={`font-bold ${textPrimary}`}>Redeem a Promo Code</h3>
         </div>
         <p className={`text-sm mb-4 ${textSecondary}`}>
-          Have a founding-member promo code? Enter it here to activate your Founding Member status.
+          Have a founding-member promo code? Enter it here to unlock Founding Member pricing.
         </p>
         <div className="flex gap-2">
           <input

@@ -78,16 +78,20 @@ serve(async (req) => {
   // ── Get user profile (pricing region, email) ───────────────────────────────
   const { data: profile, error: profErr } = await supabase
     .from('profiles')
-    .select('pricing_region, currency, display_name, plan')
+    .select('pricing_region, currency, display_name, plan, is_founding_member')
     .eq('id', user.id)
     .single();
 
   if (profErr || !profile) return corsError('Profile not found', 404);
 
-  // Prevent downgrade (e.g. already founding → can't buy monthly)
-  // Allow upgrade within same or higher tier
+  // Block repurchase if already on founding plan
   if (profile.plan === 'founding') {
     return corsError('You are already a Founding Member — no further upgrade needed.');
+  }
+
+  // Founding plan is invite-only — require promo redemption first
+  if (plan === 'founding' && !profile.is_founding_member) {
+    return corsError('Founding Member plan requires an approved promo code.', 403);
   }
 
   const region    = (profile.pricing_region ?? 'international') as 'local' | 'international';

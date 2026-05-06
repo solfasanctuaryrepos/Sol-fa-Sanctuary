@@ -76,8 +76,6 @@ serve(async (req) => {
     .from('profiles')
     .update({
       is_founding_member:  true,
-      plan:                'founding',
-      plan_expires_at:     null,   // founding membership never expires
       founding_promo_code: code,
     })
     .eq('id', user.id);
@@ -97,6 +95,6 @@ serve(async (req) => {
 
   return corsResponse({
     success: true,
-    message: 'Welcome, Founding Member! Your plan is now active.',
+    message: 'Promo applied! Complete your subscription above to activate Founding Membership.',
   });
 });
