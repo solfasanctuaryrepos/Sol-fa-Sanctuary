@@ -387,6 +387,17 @@ const PricingPage: React.FC<PricingPageProps> = ({
   ];
 
   return (
+    <>
+    {/* Fixed payment-in-progress toast — visible regardless of scroll position */}
+    {paymentWindowOpen && (
+      <div className={`fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 rounded-2xl border shadow-2xl px-5 py-3.5 text-sm font-medium max-w-[90vw] animate-in slide-in-from-bottom-4 duration-300 ${darkMode ? 'bg-slate-800 border-slate-700 text-amber-300' : 'bg-white border-amber-200 text-amber-800'}`}>
+        <Loader2 size={16} className="animate-spin shrink-0 text-amber-500" />
+        <span>Payment opened in a new tab — complete it there, then return here. Your plan updates automatically.</span>
+        <button onClick={() => setPaymentWindowOpen(false)} className="ml-2 shrink-0 opacity-50 hover:opacity-100 transition-opacity">
+          <X size={16} />
+        </button>
+      </div>
+    )}
     <div className="max-w-5xl mx-auto space-y-12 py-8 pb-16 animate-in fade-in duration-500">
 
       {/* ── Payment return banner ─────────────────────────────────────────────── */}
@@ -547,15 +558,6 @@ const PricingPage: React.FC<PricingPageProps> = ({
           ))}
         </div>
 
-        {paymentWindowOpen && (
-          <div className={`flex items-center gap-3 rounded-xl border px-4 py-3 mt-4 text-sm font-medium ${darkMode ? 'bg-amber-950/30 border-amber-700/40 text-amber-300' : 'bg-amber-50 border-amber-200 text-amber-800'}`}>
-            <Loader2 size={16} className="animate-spin shrink-0" />
-            <span>Payment opened in a new tab — complete it there, then return here. Your plan updates automatically.</span>
-            <button onClick={() => setPaymentWindowOpen(false)} className="ml-auto shrink-0 opacity-60 hover:opacity-100 transition-opacity">
-              <X size={16} />
-            </button>
-          </div>
-        )}
         {checkoutError && (
           <p className="text-center text-sm text-red-500 mt-4">{checkoutError}</p>
         )}
@@ -719,6 +721,7 @@ const PricingPage: React.FC<PricingPageProps> = ({
         {' '}Questions? <a href="mailto:solfasanctuary@gmail.com" className="text-green-500 hover:underline">Contact us</a>.
       </p>
     </div>
+    </>
   );
 };
 
