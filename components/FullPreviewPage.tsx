@@ -954,84 +954,162 @@ const FullPreviewPage: React.FC<FullPreviewPageProps> = ({
     setPdfError(null);
     setFetchProgress(0);
 
-    // Revoke any previous blob URL to free memory.
     if (blobUrlRef.current) {
       URL.revokeObjectURL(blobUrlRef.current);
       blobUrlRef.current = null;
     }
 
-    let timeoutId: ReturnType<typeof setTimeout> | null = null;
     let cancelled = false;
+    let activeLoadingTask: any = null;
+
+    // Backoff delays in ms — 3 attempts total (initial + 2 retries).
+    const BACKOFF = [500, 1500, 4000];
+    const PER_ATTEMPT_TIMEOUT_MS = 30000;
+    const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
+
+    const isRetryableError = (err: any): boolean => {
+      if (!err) return false;
+      if (err?.name === 'AbortError') return false;
+      const name = err?.name ?? '';
+      // Permanent PDF.js errors — don't retry.
+      if (name === 'MissingPDFException' || name === 'InvalidPDFException' || name === 'PasswordException') return false;
+      const msg = String(err?.message ?? err);
+      if (/HTTP 4\d\d/.test(msg)) return false;        // 4xx permanent
+      if (/HTTP 5\d\d/.test(msg)) return true;         // 5xx transient
+      if (/network|fetch|timeout|connection|aborted|destroyed/i.test(msg)) return true;
+      if (name === 'UnexpectedResponseException') return true;
+      return true; // default: retry
+    };
+
+    const isRangeRelatedError = (err: any): boolean => {
+      const msg = String(err?.message ?? err ?? '');
+      return err?.name === 'UnexpectedResponseException' || /range|partial content|206/i.test(msg);
+    };
+
+    const setupWorker = (pdfjsLib: any) => {
+      pdfjsLib.GlobalWorkerOptions.workerSrc =
+        `https://cdn.jsdelivr.net/npm/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.js`;
+    };
+
+    // Phase 2 — native Range loading. PDF.js fetches xref/trailer first, renders page 1
+    // ASAP, then streams more ranges as pages are requested by LazyPdfPage.
+    const loadViaRange = async (pdfUrl: string): Promise<any> => {
+      const pdfjsLib = (window as any).pdfjsLib;
+      if (!pdfjsLib) throw new Error('PDF.js not loaded');
+      setupWorker(pdfjsLib);
+
+      const loadingTask = pdfjsLib.getDocument({
+        url:             pdfUrl,
+        rangeChunkSize:  65536,
+        disableRange:    false,
+        disableStream:   false,
+        withCredentials: false,
+      });
+      activeLoadingTask = loadingTask;
+
+      loadingTask.onProgress = (p: { loaded: number; total: number }) => {
+        if (cancelled) return;
+        if (p.total > 0) {
+          setFetchProgress(Math.min(99, Math.round((p.loaded / p.total) * 95)));
+        }
+      };
+
+      const timeoutId = setTimeout(() => { try { loadingTask.destroy(); } catch {} }, PER_ATTEMPT_TIMEOUT_MS);
+      try {
+        return await loadingTask.promise;
+      } finally {
+        clearTimeout(timeoutId);
+      }
+    };
+
+    // Phase 3 — full-blob fallback (offline mode, or when Range is blocked).
+    // The service worker intercepts this fetch and serves from the offline cache.
+    const loadViaBlob = async (pdfUrl: string): Promise<any> => {
+      const pdfjsLib = (window as any).pdfjsLib;
+      if (!pdfjsLib) throw new Error('PDF.js not loaded');
+      setupWorker(pdfjsLib);
+
+      const response = await fetch(pdfUrl, { mode: 'cors' });
+      if (!response.ok) throw new Error(`HTTP ${response.status} fetching PDF`);
+      if (cancelled) throw new Error('cancelled');
+
+      const contentLength = Number(response.headers.get('content-length') ?? 0);
+      let blob: Blob;
+
+      if (contentLength > 0 && response.body) {
+        const reader = response.body.getReader();
+        const chunks: Uint8Array[] = [];
+        let received = 0;
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          if (cancelled) { reader.cancel(); throw new Error('cancelled'); }
+          chunks.push(value);
+          received += value.length;
+          setFetchProgress(Math.min(99, Math.round((received / contentLength) * 90)));
+        }
+        blob = new Blob(chunks, { type: 'application/pdf' });
+      } else {
+        blob = await response.blob();
+      }
+
+      if (cancelled) throw new Error('cancelled');
+
+      const blobUrl = URL.createObjectURL(blob);
+      blobUrlRef.current = blobUrl;
+
+      const loadingTask = pdfjsLib.getDocument({ url: blobUrl });
+      activeLoadingTask = loadingTask;
+
+      const timeoutId = setTimeout(() => { try { loadingTask.destroy(); } catch {} }, PER_ATTEMPT_TIMEOUT_MS);
+      try {
+        return await loadingTask.promise;
+      } finally {
+        clearTimeout(timeoutId);
+      }
+    };
 
     const loadPdf = async () => {
-      // Allow 60 s total — blob fetch + PDF.js parse for large scores.
-      timeoutId = setTimeout(() => {
-        if (!cancelled) {
-          setPdfError('Failed to load PDF. Please try again.');
-          setIsInitialLoading(false);
-        }
-      }, 60000);
-
       try {
-        // 1. Resolve URL (rewrites legacy IPs; creates signed URL for private sheets).
         const pdfUrl = await getPdfUrl(sheet);
         if (cancelled) return;
-        setResolvedPdfUrl(pdfUrl); // keep original URL for the Download button
+        setResolvedPdfUrl(pdfUrl);
 
-        // 2. Fetch the whole PDF as a blob.
-        //    • Avoids HTTP range requests that Supabase storage can reject with 503.
-        //    • The service worker intercepts this fetch and serves from the offline
-        //      cache when the user is offline — preview works the same as online.
-        //    • PDF.js receives a local blob: URL so its worker has no CORS concerns.
-        const response = await fetch(pdfUrl, { mode: 'cors' });
-        if (!response.ok) throw new Error(`HTTP ${response.status} fetching PDF`);
-        if (cancelled) return;
+        // Offline → blob path only (SW serves from cache).
+        const startOffline = typeof navigator !== 'undefined' && navigator.onLine === false;
+        let useBlob = startOffline;
+        let lastErr: any = null;
 
-        // Track download progress when the server sends Content-Length.
-        const contentLength = Number(response.headers.get('content-length') ?? 0);
-        let received = 0;
-        let blob: Blob;
+        for (let attempt = 0; attempt < BACKOFF.length; attempt++) {
+          if (cancelled) return;
+          try {
+            const pdf = useBlob ? await loadViaBlob(pdfUrl) : await loadViaRange(pdfUrl);
+            if (cancelled) return;
+            setFetchProgress(100);
+            setPdfDoc(pdf);
+            setNumPages(pdf.numPages);
+            return;
+          } catch (err: any) {
+            if (cancelled) return;
+            lastErr = err;
+            console.warn(`PDF load attempt ${attempt + 1}/${BACKOFF.length} failed (${useBlob ? 'blob' : 'range'}):`, err);
 
-        if (contentLength > 0 && response.body) {
-          const reader = response.body.getReader();
-          const chunks: Uint8Array[] = [];
-          while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
-            if (cancelled) { reader.cancel(); return; }
-            chunks.push(value);
-            received += value.length;
-            setFetchProgress(Math.min(99, Math.round((received / contentLength) * 90)));
+            // First Range failure → switch to blob fallback for the next attempt
+            // (no backoff — try the alternate path immediately).
+            if (!useBlob && isRangeRelatedError(err)) {
+              useBlob = true;
+              continue;
+            }
+            if (!isRetryableError(err)) break;
+            if (attempt < BACKOFF.length - 1) {
+              await sleep(BACKOFF[attempt]);
+            }
           }
-          blob = new Blob(chunks, { type: 'application/pdf' });
-        } else {
-          // No Content-Length — just await the whole response.
-          blob = await response.blob();
         }
 
-        if (cancelled) return;
-        setFetchProgress(99);
-
-        const blobUrl = URL.createObjectURL(blob);
-        blobUrlRef.current = blobUrl;
-
-        // 3. Hand PDF.js the local blob URL — no network traffic, no CORS, no range requests.
-        const pdfjsLib = (window as any).pdfjsLib;
-        if (!pdfjsLib) throw new Error('PDF.js not loaded');
-
-        pdfjsLib.GlobalWorkerOptions.workerSrc =
-          `https://cdn.jsdelivr.net/npm/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.js`;
-
-        const loadingTask = pdfjsLib.getDocument({ url: blobUrl });
-        const pdf = await loadingTask.promise;
-        if (cancelled) return;
-        if (timeoutId) clearTimeout(timeoutId);
-        setFetchProgress(100);
-        setPdfDoc(pdf);
-        setNumPages(pdf.numPages);
+        throw lastErr ?? new Error('Failed to load PDF');
       } catch (error) {
         if (cancelled) return;
-        if (timeoutId) clearTimeout(timeoutId);
         console.error('PDF load error:', error);
         setPdfError('Failed to load PDF. Please try again.');
       } finally {
@@ -1042,7 +1120,9 @@ const FullPreviewPage: React.FC<FullPreviewPageProps> = ({
     loadPdf();
     return () => {
       cancelled = true;
-      if (timeoutId) clearTimeout(timeoutId);
+      if (activeLoadingTask) {
+        try { activeLoadingTask.destroy(); } catch {}
+      }
       if (blobUrlRef.current) {
         URL.revokeObjectURL(blobUrlRef.current);
         blobUrlRef.current = null;
