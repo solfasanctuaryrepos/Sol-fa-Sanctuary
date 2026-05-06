@@ -101,13 +101,14 @@ interface PlanCardProps {
   loading: boolean;
   darkMode: boolean;
   billingActive: boolean;
+  entLoaded: boolean;
   highlights: string[];
 }
 
 const PlanCard: React.FC<PlanCardProps> = ({
   plan, altPlan, hasBillingToggle, billingPeriod = 'monthly', onBillingPeriodChange,
   label, tagline, icon, accentClass, borderClass, isCurrent,
-  isPopular, region, onUpgrade, loading, darkMode, billingActive, highlights,
+  isPopular, region, onUpgrade, loading, darkMode, billingActive, entLoaded, highlights,
 }) => {
   // When the toggle is active, use the yearly plan's pricing & upgrade target
   const effectivePlan = (hasBillingToggle && billingPeriod === 'yearly' && altPlan) ? altPlan : plan;
@@ -130,7 +131,7 @@ const PlanCard: React.FC<PlanCardProps> = ({
           Your Plan
         </div>
       )}
-      {!billingActive && !isCurrent && (
+      {entLoaded && !billingActive && !isCurrent && (
         <div className="absolute top-3 right-3 flex items-center gap-1 bg-blue-500/10 border border-blue-500/20 text-blue-400 text-[10px] font-bold px-2 py-0.5 rounded-full tracking-wide">
           Launching soon
         </div>
@@ -510,6 +511,7 @@ const PricingPage: React.FC<PricingPageProps> = ({
               loading={checkoutLoading === cfg.plan || checkoutLoading === cfg.altPlan}
               darkMode={darkMode}
               billingActive={ent.billingActive}
+              entLoaded={ent.loaded}
               billingPeriod={cfg.hasBillingToggle ? maestroBilling : undefined}
               onBillingPeriodChange={cfg.hasBillingToggle ? setMaestroBilling : undefined}
             />
