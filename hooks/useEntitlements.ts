@@ -173,17 +173,17 @@ export function useEntitlements(userId: string | null): Entitlements {
         .select('billing_active')
         .eq('id', 1)
         .single(),
-      db.from('org_members')
-        .select('org_id, role, organisations(plan, plan_expires_at)')
-        .eq('user_id', userId)
-        .eq('status', 'active')
-        .limit(1)
-        .maybeSingle(),
+      db.rpc('get_my_org_membership').maybeSingle(),
     ]);
 
     const profile       = profileRes.data;
     const billingActive = configRes.data?.billing_active ?? false;
-    const orgMembership = orgRes.data as OrgMembership | null;
+    const rawOrg = orgRes.data as { org_id: string; role: string; org_plan: string; org_plan_expires_at: string | null } | null;
+    const orgMembership: OrgMembership | null = rawOrg ? {
+      org_id: rawOrg.org_id,
+      role: rawOrg.role as OrgMembership['role'],
+      organisations: { plan: rawOrg.org_plan, plan_expires_at: rawOrg.org_plan_expires_at },
+    } : null;
 
     if (!profile) {
       setState(buildEntitlements('free', null, false, 'international', 'USD', billingActive, orgMembership));
