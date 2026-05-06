@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Mail, Lock, User as UserIcon, LogIn, UserPlus, AlertCircle, CheckCircle, ArrowLeft, KeyRound, RefreshCw } from 'lucide-react';
+import { X, Mail, Lock, User as UserIcon, LogIn, UserPlus, AlertCircle, CheckCircle, ArrowLeft, KeyRound, RefreshCw, Eye, EyeOff } from 'lucide-react';
 import { auth, db } from '../supabase';
 import Modal from './Modal';
 
@@ -23,6 +23,8 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, darkMode, recove
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [unconfirmedEmail, setUnconfirmedEmail] = useState<string | null>(null);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [resendLoading, setResendLoading] = useState(false);
 
   // Reset form state whenever the modal opens
@@ -280,13 +282,22 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, darkMode, recove
                 <div className="relative">
                   <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
                   <input
-                    id="password" name="password" type="password"
+                    id="password" name="password" type={showPassword ? 'text' : 'password'}
                     autoComplete={mode === 'signup' || mode === 'newPassword' ? 'new-password' : 'current-password'}
                     value={password} onChange={e => setPassword(e.target.value)}
                     placeholder="••••••••" minLength={mode === 'newPassword' ? 8 : undefined}
-                    className={`w-full rounded-xl pl-10 pr-4 py-3 border focus:outline-none focus:ring-2 focus:ring-green-500/20 focus:border-green-500 transition-all ${inputBg} ${inputText}`}
+                    className={`w-full rounded-xl pl-10 pr-10 py-3 border focus:outline-none focus:ring-2 focus:ring-green-500/20 focus:border-green-500 transition-all ${inputBg} ${inputText}`}
                     required
                   />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(v => !v)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors"
+                    tabIndex={-1}
+                    aria-label={showPassword ? 'Hide password' : 'Show password'}
+                  >
+                    {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                  </button>
                 </div>
               </div>
             )}
@@ -298,12 +309,21 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, darkMode, recove
                 <div className="relative">
                   <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
                   <input
-                    id="confirm-password" name="confirm-password" type="password" autoComplete="new-password"
+                    id="confirm-password" name="confirm-password" type={showConfirmPassword ? 'text' : 'password'} autoComplete="new-password"
                     value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)}
                     placeholder="••••••••"
-                    className={`w-full rounded-xl pl-10 pr-4 py-3 border focus:outline-none focus:ring-2 focus:ring-green-500/20 focus:border-green-500 transition-all ${inputBg} ${inputText}`}
+                    className={`w-full rounded-xl pl-10 pr-10 py-3 border focus:outline-none focus:ring-2 focus:ring-green-500/20 focus:border-green-500 transition-all ${inputBg} ${inputText}`}
                     required
                   />
+                  <button
+                    type="button"
+                    onClick={() => setShowConfirmPassword(v => !v)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors"
+                    tabIndex={-1}
+                    aria-label={showConfirmPassword ? 'Hide password' : 'Show password'}
+                  >
+                    {showConfirmPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                  </button>
                 </div>
               </div>
             )}
