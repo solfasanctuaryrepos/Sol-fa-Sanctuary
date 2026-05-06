@@ -173,12 +173,12 @@ export function useEntitlements(userId: string | null): Entitlements {
         .select('billing_active')
         .eq('id', 1)
         .single(),
-      db.rpc('get_my_org_membership').maybeSingle(),
+      db.rpc('get_my_org_membership'),
     ]);
 
     const profile       = profileRes.data;
     const billingActive = configRes.data?.billing_active ?? false;
-    const rawOrg = orgRes.data as { org_id: string; role: string; org_plan: string; org_plan_expires_at: string | null } | null;
+    const rawOrg = (Array.isArray(orgRes.data) ? orgRes.data[0] : null) as { org_id: string; role: string; org_plan: string; org_plan_expires_at: string | null } | null;
     const orgMembership: OrgMembership | null = rawOrg ? {
       org_id: rawOrg.org_id,
       role: rawOrg.role as OrgMembership['role'],

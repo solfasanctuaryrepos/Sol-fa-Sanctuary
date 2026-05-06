@@ -39,7 +39,7 @@ const PRICES = {
 type PaidPlan = keyof typeof PRICES;
 
 const PAYMENT_METHODS: Record<string, string[]> = {
-  XAF: ['mtn_cm', 'orange_cm', 'card_xaf', 'crypto_xaf'],
+  XAF: ['mtn_cm', 'orange_cm'],
   USD: ['card_usd', 'crypto_usd'],
 };
 
