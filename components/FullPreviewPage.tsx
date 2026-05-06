@@ -1002,7 +1002,7 @@ const FullPreviewPage: React.FC<FullPreviewPageProps> = ({
         url:             pdfUrl,
         rangeChunkSize:  65536,
         disableRange:    false,
-        disableStream:   false,
+        disableStream:   true,   // pure Range-only; streaming + Range simultaneously causes conflicts
         withCredentials: false,
       });
       activeLoadingTask = loadingTask;
