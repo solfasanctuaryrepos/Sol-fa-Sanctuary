@@ -151,38 +151,55 @@ const EnsemblePage: React.FC<EnsemblePageProps> = ({
     if (!currentUser) { setLoading(false); return; }
     setLoading(true);
     try {
-      // Check for pending invite matching this user's email
-      const { data: inviteRow } = await db
-        .from('org_members')
-        .select('*, organisations(*)')
-        .eq('email', currentUser.email.toLowerCase())
-        .eq('status', 'pending')
-        .maybeSingle();
+      // Use SECURITY DEFINER RPCs to avoid RLS recursion on org_members
+      const [inviteRes, memberRes] = await Promise.all([
+        db.rpc('get_my_pending_invite'),
+        db.rpc('get_my_active_membership'),
+      ]);
 
-      if (inviteRow) {
+      // Pending invite
+      const rawInvite = Array.isArray(inviteRes.data) ? inviteRes.data[0] : null;
+      if (rawInvite) {
         setPendingInvite({
-          member: inviteRow as OrgMember,
-          org: (inviteRow as any).organisations as Organisation,
+          member: {
+            id: rawInvite.member_id, org_id: rawInvite.org_id,
+            user_id: rawInvite.user_id, email: rawInvite.email,
+            role: rawInvite.role, status: rawInvite.status,
+            invited_by: rawInvite.invited_by, invited_at: rawInvite.invited_at,
+            joined_at: rawInvite.joined_at,
+          } as OrgMember,
+          org: {
+            id: rawInvite.org_id, name: rawInvite.org_name,
+            owner_id: rawInvite.org_owner_id, plan: rawInvite.org_plan as 'ensemble',
+            plan_expires_at: rawInvite.org_plan_expires_at,
+            max_seats: rawInvite.org_max_seats, created_at: rawInvite.org_created_at,
+          } as Organisation,
         });
       } else {
         setPendingInvite(null);
       }
 
-      // Check for active membership
-      const { data: memberRow } = await db
-        .from('org_members')
-        .select('*, organisations(*)')
-        .eq('user_id', currentUser.id)
-        .eq('status', 'active')
-        .maybeSingle();
-
-      if (memberRow) {
-        const orgData = (memberRow as any).organisations as Organisation;
+      // Active membership
+      const rawMember = Array.isArray(memberRes.data) ? memberRes.data[0] : null;
+      if (rawMember) {
+        const orgData: Organisation = {
+          id: rawMember.org_id, name: rawMember.org_name,
+          owner_id: rawMember.org_owner_id, plan: rawMember.org_plan as 'ensemble',
+          plan_expires_at: rawMember.org_plan_expires_at,
+          max_seats: rawMember.org_max_seats, created_at: rawMember.org_created_at,
+        };
+        const memberData: OrgMember = {
+          id: rawMember.member_id, org_id: rawMember.org_id,
+          user_id: rawMember.user_id, email: rawMember.email,
+          role: rawMember.role, status: rawMember.status,
+          invited_by: rawMember.invited_by, invited_at: rawMember.invited_at,
+          joined_at: rawMember.joined_at,
+        };
         setOrg(orgData);
-        setMyMembership(memberRow as OrgMember);
+        setMyMembership(memberData);
         await Promise.all([
-          loadMembers(memberRow.org_id),
-          loadCollections(memberRow.org_id),
+          loadMembers(rawMember.org_id),
+          loadCollections(rawMember.org_id),
         ]);
       } else {
         setOrg(null);
