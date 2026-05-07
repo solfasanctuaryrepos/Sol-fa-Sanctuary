@@ -1,6 +1,6 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { Upload, Music, Eye, Download, Search, List, Grid, MoreVertical, Edit2, Trash2, FileText, ArrowUp, ArrowDown, X, Check, Lock, ShieldAlert, Globe, AlertTriangle, Heart, BarChart2, RefreshCw, BookOpen, MessageSquare, ThumbsUp, Clock, CheckCircle2, WifiOff, CloudOff } from 'lucide-react';
+import { Upload, Music, Eye, Download, Search, List, Grid, MoreVertical, Edit2, Trash2, FileText, ArrowUp, ArrowDown, X, Check, Lock, ShieldAlert, Globe, AlertTriangle, Heart, BarChart2, RefreshCw, BookOpen, MessageSquare, ThumbsUp, Clock, CheckCircle2, WifiOff, CloudOff, Users } from 'lucide-react';
 import { MusicSheet, SheetRequest } from '../types';
 import { db, storage } from '../supabase';
 import { OfflineSheetMeta } from '../hooks/useOfflineSheets';
@@ -26,6 +26,7 @@ interface DashboardProps {
   onSaveOffline?: (sheet: MusicSheet) => Promise<void>;
   onRemoveOffline?: (sheet: MusicSheet) => Promise<void>;
   onPreviewOfflineSheet?: (sheet: MusicSheet) => void;
+  onJoinTeam?: () => void;
 }
 
 type SortConfig = { key: keyof MusicSheet; direction: 'asc' | 'desc' } | null;
@@ -134,7 +135,7 @@ const AnalyticsPanel: React.FC<{ sheet: MusicSheet; darkMode: boolean; onClose: 
 };
 // ─────────────────────────────────────────────────────────────────────────────
 
-const Dashboard: React.FC<DashboardProps> = ({ onUploadClick, onPreview, darkMode, sheets, userEmail, userId, onSheetDeleted, onSheetUpdated, userFavorites = [], onFavoritesChange, onNavigateCollections, onRequestSheet, offlineMeta = [], onSaveOffline, onRemoveOffline, onPreviewOfflineSheet }) => {
+const Dashboard: React.FC<DashboardProps> = ({ onUploadClick, onPreview, darkMode, sheets, userEmail, userId, onSheetDeleted, onSheetUpdated, userFavorites = [], onFavoritesChange, onNavigateCollections, onRequestSheet, offlineMeta = [], onSaveOffline, onRemoveOffline, onPreviewOfflineSheet, onJoinTeam }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [viewMode, setViewMode] = useState<'list' | 'grid'>('grid');
   const [sortConfig, setSortConfig] = useState<SortConfig>(null);
@@ -355,6 +356,15 @@ const Dashboard: React.FC<DashboardProps> = ({ onUploadClick, onPreview, darkMod
             >
               <BookOpen size={18} />
               Collections
+            </button>
+          )}
+          {onJoinTeam && (
+            <button
+              onClick={onJoinTeam}
+              className={`flex items-center justify-center gap-2 px-5 py-2.5 border font-semibold rounded-lg transition-all active:scale-95 ${darkMode ? 'border-purple-700/60 text-purple-400 hover:bg-purple-900/20' : 'border-purple-200 text-purple-600 hover:bg-purple-50'}`}
+            >
+              <Users size={18} />
+              Join a Team
             </button>
           )}
           <button

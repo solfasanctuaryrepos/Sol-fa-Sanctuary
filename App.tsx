@@ -27,6 +27,7 @@ import PricingPage from './components/PricingPage';
 import FoundingMemberBanner from './components/FoundingMemberBanner';
 import BillingAdminPage from './components/BillingAdminPage';
 import EnsemblePage from './components/EnsemblePage';
+import { JoinTeamModal } from './components/JoinTeamModal';
 
 interface SupabaseUser {
   id: string;
@@ -58,6 +59,7 @@ const App: React.FC = () => {
   const [previousView, setPreviousView] = useState<View>('home');
   const [previousPreview, setPreviousPreview] = useState<MusicSheet | null>(null);
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
+  const [isJoinTeamModalOpen, setIsJoinTeamModalOpen] = useState(false);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [isRecoveryMode, setIsRecoveryMode] = useState(false);
   const [paymentReturnStatus, setPaymentReturnStatus] = useState<'success' | 'failed' | 'cancelled' | null>(null);
@@ -482,6 +484,7 @@ const App: React.FC = () => {
             onSaveOffline={offlineSheets.saveForOffline}
             onRemoveOffline={offlineSheets.removeFromOffline}
             onPreviewOfflineSheet={(sheet) => { setActivePreview(sheet); }}
+            onJoinTeam={() => setIsJoinTeamModalOpen(true)}
           />
         ) : null;
       case 'library':
@@ -737,6 +740,13 @@ const App: React.FC = () => {
         }}
         onOpenPricing={() => { setIsRequestModalOpen(false); setCurrentView('pricing'); }}
       />
+
+      {isJoinTeamModalOpen && (
+        <JoinTeamModal
+          darkMode={darkMode}
+          onClose={() => setIsJoinTeamModalOpen(false)}
+        />
+      )}
 
       <AuthModal
         isOpen={isAuthModalOpen}

@@ -18,7 +18,8 @@ import React, { useState, useEffect, useCallback } from 'react';
 import {
   Users, Plus, Loader2, CheckCircle2, XCircle, Crown, Shield,
   UserPlus, Trash2, LogOut, BookOpen, Music, Search, ChevronRight,
-  ArrowLeft, Zap, Copy, RefreshCw, Info,
+  ArrowLeft, Zap, Copy, RefreshCw, Info, Bell, ToggleLeft, ToggleRight,
+  AlertTriangle,
 } from 'lucide-react';
 import { db } from '../supabase';
 import { useEntitlementsContext } from '../contexts/EntitlementsContext';
@@ -86,7 +87,18 @@ const EnsemblePage: React.FC<EnsemblePageProps> = ({
   const [collections, setCollections]       = useState<OrgCollection[]>([]);
   const [activeCollection, setActiveCollection] = useState<OrgCollection | null>(null);
   const [collectionSheets, setCollectionSheets] = useState<SheetInCollection[]>([]);
-  const [tab, setTab]                       = useState<'members' | 'collections'>('members');
+  const [tab, setTab]                       = useState<'members' | 'collections' | 'requests'>('members');
+
+  // ── Join requests (owner/admin) ───────────────────────────────────────────────
+  interface JoinRequest { id: string; user_id: string | null; email: string; join_message: string | null; requested_at: string; display_name: string | null; }
+  const [joinRequests, setJoinRequests]     = useState<JoinRequest[]>([]);
+  const [requestsLoading, setRequestsLoading] = useState(false);
+  const [approvingId, setApprovingId]       = useState<string | null>(null);
+  const [rejectingId, setRejectingId]       = useState<string | null>(null);
+
+  // ── Discoverability toggle ────────────────────────────────────────────────────
+  const [isDiscoverable, setIsDiscoverable] = useState(false);
+  const [togglingDisc, setTogglingDisc]     = useState(false);
 
   // ── Create org form ───────────────────────────────────────────────────────────
   const [orgName, setOrgName]               = useState('');
@@ -197,6 +209,9 @@ const EnsemblePage: React.FC<EnsemblePageProps> = ({
         };
         setOrg(orgData);
         setMyMembership(memberData);
+        // Fetch discoverability (not in membership RPC — query org directly)
+        db.from('organisations').select('is_discoverable').eq('id', rawMember.org_id).single()
+          .then(({ data }) => setIsDiscoverable(data?.is_discoverable ?? false));
         await Promise.all([
           loadMembers(rawMember.org_id),
           loadCollections(rawMember.org_id),
@@ -342,6 +357,57 @@ const EnsemblePage: React.FC<EnsemblePageProps> = ({
       alert(e.message ?? 'Failed to remove member');
     } finally {
       setRemovingId(null);
+    }
+  };
+
+  // ── Join requests ─────────────────────────────────────────────────────────────
+  const loadJoinRequests = useCallback(async (orgId: string) => {
+    setRequestsLoading(true);
+    const { data } = await db.rpc('list_org_requests', { org_id_param: orgId });
+    setJoinRequests((data ?? []) as JoinRequest[]);
+    setRequestsLoading(false);
+  }, []);
+
+  const approveRequest = async (memberId: string) => {
+    if (!org) return;
+    setApprovingId(memberId);
+    try {
+      const { error } = await db.rpc('approve_org_request', { member_id_param: memberId });
+      if (error) throw error;
+      setJoinRequests(prev => prev.filter(r => r.id !== memberId));
+      await loadMembers(org.id);
+    } catch (e: any) {
+      alert(e.message ?? 'Failed to approve request');
+    } finally {
+      setApprovingId(null);
+    }
+  };
+
+  const rejectRequest = async (memberId: string) => {
+    setRejectingId(memberId);
+    try {
+      const { error } = await db.rpc('reject_org_request', { member_id_param: memberId });
+      if (error) throw error;
+      setJoinRequests(prev => prev.filter(r => r.id !== memberId));
+    } catch (e: any) {
+      alert(e.message ?? 'Failed to reject request');
+    } finally {
+      setRejectingId(null);
+    }
+  };
+
+  const toggleDiscoverable = async () => {
+    if (!org) return;
+    setTogglingDisc(true);
+    const next = !isDiscoverable;
+    try {
+      const { error } = await db.rpc('set_org_discoverable', { org_id_param: org.id, discoverable_param: next });
+      if (error) throw error;
+      setIsDiscoverable(next);
+    } catch (e: any) {
+      alert(e.message ?? 'Failed to update discoverability');
+    } finally {
+      setTogglingDisc(false);
     }
   };
 
@@ -594,19 +660,35 @@ const EnsemblePage: React.FC<EnsemblePageProps> = ({
 
       {/* Tab bar */}
       <div className={`flex gap-1 rounded-xl p-1 ${darkMode ? 'bg-slate-800/60' : 'bg-slate-100'}`}>
-        {(['members', 'collections'] as const).map(t => (
+        <button
+          onClick={() => setTab('members')}
+          className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-sm font-semibold transition-all
+            ${tab === 'members' ? (darkMode ? 'bg-slate-700 text-slate-100 shadow' : 'bg-white text-slate-900 shadow-sm') : (darkMode ? 'text-slate-500 hover:text-slate-300' : 'text-slate-500 hover:text-slate-700')}`}
+        >
+          <Users size={15} /> Members ({members.length})
+        </button>
+        <button
+          onClick={() => setTab('collections')}
+          className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-sm font-semibold transition-all
+            ${tab === 'collections' ? (darkMode ? 'bg-slate-700 text-slate-100 shadow' : 'bg-white text-slate-900 shadow-sm') : (darkMode ? 'text-slate-500 hover:text-slate-300' : 'text-slate-500 hover:text-slate-700')}`}
+        >
+          <BookOpen size={15} /> Collections ({collections.length})
+        </button>
+        {isOwnerOrAdmin && (
           <button
-            key={t}
-            onClick={() => setTab(t)}
-            className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-sm font-semibold transition-all capitalize
-              ${tab === t
-                ? (darkMode ? 'bg-slate-700 text-slate-100 shadow' : 'bg-white text-slate-900 shadow-sm')
-                : (darkMode ? 'text-slate-500 hover:text-slate-300' : 'text-slate-500 hover:text-slate-700')}`}
+            onClick={() => { setTab('requests'); if (org) loadJoinRequests(org.id); }}
+            className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-sm font-semibold transition-all
+              ${tab === 'requests' ? (darkMode ? 'bg-slate-700 text-slate-100 shadow' : 'bg-white text-slate-900 shadow-sm') : (darkMode ? 'text-slate-500 hover:text-slate-300' : 'text-slate-500 hover:text-slate-700')}`}
           >
-            {t === 'members' ? <Users size={15} /> : <BookOpen size={15} />}
-            {t === 'members' ? `Members (${members.length})` : `Collections (${collections.length})`}
+            <Bell size={15} />
+            Requests
+            {joinRequests.length > 0 && (
+              <span className="bg-purple-500 text-white text-xs rounded-full w-4 h-4 flex items-center justify-center leading-none">
+                {joinRequests.length}
+              </span>
+            )}
           </button>
-        ))}
+        )}
       </div>
 
       {/* ── Members tab ─────────────────────────────────────────────────────── */}
@@ -699,6 +781,95 @@ const EnsemblePage: React.FC<EnsemblePageProps> = ({
                             : <Trash2 size={14} />}
                       </button>
                     ) : null}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ── Requests tab (owner/admin only) ──────────────────────────────────── */}
+      {tab === 'requests' && isOwnerOrAdmin && (
+        <div className="space-y-4">
+
+          {/* Discoverability toggle */}
+          <div className={`rounded-2xl border p-5 ${cardBg}`}>
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <p className={`font-semibold text-sm ${textPrimary}`}>Team discoverability</p>
+                <p className={`text-xs mt-0.5 ${textSecondary}`}>
+                  When enabled, your team appears in the "Join a Team" browser so users can request to join.
+                </p>
+              </div>
+              <button
+                onClick={toggleDiscoverable}
+                disabled={togglingDisc}
+                className="flex-shrink-0 transition-opacity disabled:opacity-60"
+              >
+                {isDiscoverable
+                  ? <ToggleRight size={36} className="text-purple-500" />
+                  : <ToggleLeft size={36} className={darkMode ? 'text-slate-600' : 'text-slate-400'} />}
+              </button>
+            </div>
+          </div>
+
+          {/* Seat warning */}
+          {org && members.filter(m => m.status === 'active').length >= (org.max_seats ?? 20) && (
+            <div className={`flex items-start gap-3 rounded-xl border px-4 py-3 ${darkMode ? 'bg-amber-950/30 border-amber-800/40 text-amber-400' : 'bg-amber-50 border-amber-200 text-amber-700'}`}>
+              <AlertTriangle size={15} className="mt-0.5 flex-shrink-0" />
+              <p className="text-sm">All seats filled — remove a member before approving a new request.</p>
+            </div>
+          )}
+
+          {/* Requests list */}
+          <div className={`rounded-2xl border p-5 ${cardBg}`}>
+            <h3 className={`font-bold mb-4 flex items-center gap-2 ${textPrimary}`}>
+              <Bell size={16} className="text-purple-400" />
+              Join Requests
+            </h3>
+
+            {requestsLoading ? (
+              <div className="flex justify-center py-6"><Loader2 size={20} className="animate-spin text-purple-400" /></div>
+            ) : joinRequests.length === 0 ? (
+              <p className={`text-sm text-center py-6 ${textSecondary}`}>No pending join requests.</p>
+            ) : (
+              <div className="space-y-3">
+                {joinRequests.map(req => (
+                  <div key={req.id} className={`flex items-start gap-3 p-4 rounded-xl border ${darkMode ? 'bg-slate-800/40 border-slate-700' : 'bg-slate-50 border-slate-200'}`}>
+                    <div className="w-9 h-9 rounded-full bg-purple-500/20 flex items-center justify-center flex-shrink-0">
+                      <span className="text-sm font-bold text-purple-500">
+                        {(req.display_name ?? req.email).charAt(0).toUpperCase()}
+                      </span>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className={`font-medium text-sm truncate ${textPrimary}`}>
+                        {req.display_name ?? req.email.split('@')[0]}
+                      </p>
+                      <p className={`text-xs truncate ${textSecondary}`}>{req.email}</p>
+                      {req.join_message && (
+                        <p className={`text-xs mt-1.5 italic ${textSecondary}`}>"{req.join_message}"</p>
+                      )}
+                    </div>
+                    <div className="flex gap-2 flex-shrink-0">
+                      <button
+                        onClick={() => approveRequest(req.id)}
+                        disabled={approvingId === req.id || rejectingId === req.id}
+                        className="flex items-center gap-1 px-3 py-1.5 bg-green-500 hover:bg-green-400 text-white text-xs font-bold rounded-lg disabled:opacity-60 transition-colors"
+                      >
+                        {approvingId === req.id ? <Loader2 size={12} className="animate-spin" /> : <CheckCircle2 size={12} />}
+                        Approve
+                      </button>
+                      <button
+                        onClick={() => rejectRequest(req.id)}
+                        disabled={approvingId === req.id || rejectingId === req.id}
+                        className={`flex items-center gap-1 px-3 py-1.5 text-xs font-bold rounded-lg disabled:opacity-60 transition-colors border
+                          ${darkMode ? 'border-slate-600 text-slate-400 hover:border-red-500 hover:text-red-400' : 'border-slate-200 text-slate-500 hover:border-red-300 hover:text-red-500'}`}
+                      >
+                        {rejectingId === req.id ? <Loader2 size={12} className="animate-spin" /> : <XCircle size={12} />}
+                        Reject
+                      </button>
+                    </div>
                   </div>
                 ))}
               </div>
