@@ -159,6 +159,13 @@ const EnsemblePage: React.FC<EnsemblePageProps> = ({
     setCollections((data ?? []) as OrgCollection[]);
   }, []);
 
+  const loadJoinRequests = useCallback(async (orgId: string) => {
+    setRequestsLoading(true);
+    const { data } = await db.rpc('list_org_requests', { org_id_param: orgId });
+    setJoinRequests((data ?? []) as JoinRequest[]);
+    setRequestsLoading(false);
+  }, []);
+
   const loadData = useCallback(async () => {
     if (!currentUser) { setLoading(false); return; }
     setLoading(true);
@@ -215,6 +222,7 @@ const EnsemblePage: React.FC<EnsemblePageProps> = ({
         await Promise.all([
           loadMembers(rawMember.org_id),
           loadCollections(rawMember.org_id),
+          loadJoinRequests(rawMember.org_id),  // pre-load so badge shows on mount
         ]);
       } else {
         setOrg(null);
@@ -225,7 +233,7 @@ const EnsemblePage: React.FC<EnsemblePageProps> = ({
     } finally {
       setLoading(false);
     }
-  }, [currentUser, loadMembers, loadCollections]);
+  }, [currentUser, loadMembers, loadCollections, loadJoinRequests]);
 
   useEffect(() => { loadData(); }, [loadData]);
 
@@ -360,14 +368,6 @@ const EnsemblePage: React.FC<EnsemblePageProps> = ({
     }
   };
 
-  // ── Join requests ─────────────────────────────────────────────────────────────
-  const loadJoinRequests = useCallback(async (orgId: string) => {
-    setRequestsLoading(true);
-    const { data } = await db.rpc('list_org_requests', { org_id_param: orgId });
-    setJoinRequests((data ?? []) as JoinRequest[]);
-    setRequestsLoading(false);
-  }, []);
-
   const approveRequest = async (memberId: string) => {
     if (!org) return;
     setApprovingId(memberId);
@@ -376,6 +376,7 @@ const EnsemblePage: React.FC<EnsemblePageProps> = ({
       if (error) throw error;
       setJoinRequests(prev => prev.filter(r => r.id !== memberId));
       await loadMembers(org.id);
+      ent.refresh(); // approved member's entitlements update on their next refresh
     } catch (e: any) {
       alert(e.message ?? 'Failed to approve request');
     } finally {
