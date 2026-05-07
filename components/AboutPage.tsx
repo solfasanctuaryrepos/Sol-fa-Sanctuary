@@ -41,12 +41,15 @@ const AboutPage: React.FC<AboutPageProps> = ({ darkMode }) => {
           <h2 className={`text-3xl font-serif font-bold ${textPrimary}`}>The Visionary Behind the Sanctuary</h2>
           <div className={`space-y-4 text-lg leading-relaxed ${textSecondary}`}>
             <p>
-              Growing up immersed in the rich choral traditions of the church, I witnessed first-hand the profound impact of 
+              Growing up immersed in the rich choral traditions of the church, I witnessed first-hand the profound impact of
               <span className="text-green-500 font-medium mx-1">Tonic Sol-fa notation</span>. It wasn't just music; it was a universal language that brought communities together.
             </p>
             <p>
-              As a software engineer, I noticed a digital gap. Beautiful Sol-fa scores were often tucked away in physical folders or low-quality scans. 
+              As a software engineer, I noticed a digital gap. Beautiful Sol-fa scores were often tucked away in physical folders or low-quality scans.
               <span className="font-semibold text-slate-200">Sol-fa Sanctuary</span> was born from the desire to give these scores a professional, digital home.
+            </p>
+            <p>
+              The core library is free to browse and preview for everyone. Optional paid plans — Maestro, Ensemble, and Founding Member — unlock unlimited downloads, offline access, and team features, helping sustain the platform for the long term.
             </p>
           </div>
         </div>
@@ -74,7 +77,7 @@ const AboutPage: React.FC<AboutPageProps> = ({ darkMode }) => {
         <div className="relative z-10 space-y-4">
           <h2 className={`text-4xl font-serif font-bold ${textPrimary}`}>My Philosophy</h2>
           <p className={`text-xl italic max-w-2xl mx-auto leading-relaxed ${textSecondary}`}>
-            "I believe that music should be accessible to everyone, regardless of their background or resources. Sol-fa Sanctuary is my contribution to making that a reality."
+            "I believe that music should be accessible to everyone, regardless of their background or resources. Sol-fa Sanctuary is my contribution to making that a reality — free to explore, with paid plans for those who want to go further and help sustain the mission."
           </p>
         </div>
       </section>
