@@ -95,7 +95,7 @@ const LazyPdfPage: React.FC<LazyPdfPageProps> = ({
   }, [isFirstPage, forceRender, eager]);
 
   useEffect(() => {
-    if (!pdfDoc || (!isIntersecting && !forceRender)) return;
+    if (!pdfDoc || (!isIntersecting && !forceRender && !eager)) return;
     if (hasQueued.current) return;
     hasQueued.current = true;
 
@@ -134,7 +134,7 @@ const LazyPdfPage: React.FC<LazyPdfPageProps> = ({
       cancelled = true;
       hasQueued.current = false;
     };
-  }, [pdfDoc, isIntersecting, forceRender, index]);
+  }, [pdfDoc, isIntersecting, forceRender, eager, index]);
 
   useEffect(() => () => { if (imgUrl) URL.revokeObjectURL(imgUrl); }, [imgUrl]);
 

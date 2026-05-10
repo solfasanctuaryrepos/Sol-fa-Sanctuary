@@ -1,8 +1,8 @@
-// Sol-fa Sanctuary Service Worker v7.2
+// Sol-fa Sanctuary Service Worker v7.3
 // Strategy: App shell caching + SPA offline support + CDN fallback + offline sheet PDFs
 
-const APP_SHELL_CACHE    = 'solfa-app-shell-v7.2';
-const CDN_CACHE          = 'solfa-cdn-v7.2';
+const APP_SHELL_CACHE    = 'solfa-app-shell-v7.3';
+const CDN_CACHE          = 'solfa-cdn-v7.3';
 const OFFLINE_SHEETS_CACHE = 'solfa-offline-sheets-v1'; // never versioned — user data
 
 // A guaranteed fallback Response so we never return undefined to the browser
