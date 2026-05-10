@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Download, Share2, Eye, Calendar, User, FileText, Music as MusicIcon, X, ExternalLink, Menu, ChevronUp, Loader2, AlertTriangle, AlertCircle, Heart, FolderPlus, Trash2, MessageSquare, Send, CornerDownRight, ChevronDown, ChevronRight, Lock, Zap, ChevronLeft, AlignJustify, Layers } from 'lucide-react';
+import { Download, Share2, Eye, Calendar, User, FileText, Music as MusicIcon, X, ExternalLink, Menu, ChevronUp, Loader2, AlertTriangle, AlertCircle, Heart, FolderPlus, Trash2, MessageSquare, Send, CornerDownRight, ChevronDown, ChevronRight, Lock, Zap, ChevronLeft, ScrollText, Layers } from 'lucide-react';
 import { MusicSheet, Comment, Collection } from '../types';
 import { db } from '../supabase';
 import { getPdfUrl } from '../utils/signedUrl';
@@ -1429,7 +1429,7 @@ const FullPreviewPage: React.FC<FullPreviewPageProps> = ({
               title={viewMode === 'flow' ? 'Switch to single-page view' : 'Switch to flow view'}
               className={`p-2 rounded-lg transition-colors shrink-0 ${darkMode ? 'text-slate-400 hover:text-white' : 'text-slate-500 hover:text-slate-900'}`}
             >
-              {viewMode === 'flow' ? <Layers size={20} /> : <AlignJustify size={20} />}
+              {viewMode === 'flow' ? <Layers size={20} /> : <ScrollText size={20} />}
             </button>
           )}
 
