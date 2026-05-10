@@ -82,12 +82,12 @@ const AnalyticsPanel: React.FC<{ sheet: MusicSheet; darkMode: boolean; onClose: 
 
   return (
     <div className={`mt-4 rounded-2xl border p-6 ${panelBg} animate-in slide-in-from-top-2 duration-200`}>
-      <div className="flex items-start justify-between mb-4">
-        <div>
-          <h3 className={`font-bold text-lg ${textPrimary}`}>{sheet.title}</h3>
-          <p className={`text-sm ${textSecondary}`}>{sheet.composer} — Last 14 days</p>
+      <div className="flex items-start justify-between gap-3 mb-4">
+        <div className="flex-1 min-w-0">
+          <h3 className={`font-bold text-lg break-words ${textPrimary}`}>{sheet.title}</h3>
+          <p className={`text-sm break-words ${textSecondary}`}>{sheet.composer} — Last 14 days</p>
         </div>
-        <button onClick={onClose} className={`p-1.5 rounded-lg transition-colors ${darkMode ? 'text-slate-500 hover:text-white' : 'text-slate-400 hover:text-slate-900'}`}>
+        <button onClick={onClose} className={`p-1.5 shrink-0 rounded-lg transition-colors ${darkMode ? 'text-slate-500 hover:text-white' : 'text-slate-400 hover:text-slate-900'}`}>
           <X size={18} />
         </button>
       </div>

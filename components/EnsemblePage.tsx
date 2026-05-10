@@ -849,7 +849,7 @@ const EnsemblePage: React.FC<EnsemblePageProps> = ({
                       </p>
                       <p className={`text-xs truncate ${textSecondary}`}>{req.email}</p>
                       {req.join_message && (
-                        <p className={`text-xs mt-1.5 italic ${textSecondary}`}>"{req.join_message}"</p>
+                        <p className={`text-xs mt-1.5 italic break-words ${textSecondary}`}>"{req.join_message}"</p>
                       )}
                     </div>
                     <div className="flex gap-2 flex-shrink-0">

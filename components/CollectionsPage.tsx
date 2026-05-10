@@ -194,9 +194,9 @@ const CollectionsPage: React.FC<CollectionsPageProps> = ({
             <ChevronLeft size={20} />
           </button>
           <div className="flex-1 min-w-0">
-            <h1 className={`text-2xl font-serif font-bold ${textPrimary}`}>{activeCollection.name}</h1>
+            <h1 className={`text-2xl font-serif font-bold break-words ${textPrimary}`}>{activeCollection.name}</h1>
             {activeCollection.description && (
-              <p className={`text-sm mt-1 ${textSecondary}`}>{activeCollection.description}</p>
+              <p className={`text-sm mt-1 break-words ${textSecondary}`}>{activeCollection.description}</p>
             )}
           </div>
           <div className="flex items-center gap-2">

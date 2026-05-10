@@ -800,7 +800,7 @@ const RelatedSheets: React.FC<RelatedSheetsProps> = ({ sheet, sheets, darkMode, 
     <div className="mt-6 mb-6 no-print space-y-6">
       {byComposer.length > 0 && (
         <div>
-          <h2 className={`text-lg font-serif font-bold mb-3 ${textPrimary}`}>More by {sheet.composer}</h2>
+          <h2 className={`text-lg font-serif font-bold mb-3 break-words ${textPrimary}`}>More by {sheet.composer}</h2>
           <div className="flex gap-3 flex-wrap">
             {byComposer.map(s => <SheetCard key={s.id} s={s} />)}
           </div>
