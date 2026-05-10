@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { Mail, Github, Linkedin, Music, Code, Heart, Sparkles, MapPin, ExternalLink, ArrowRight } from 'lucide-react';
+import { Mail, Facebook, Music, Code, Heart, Sparkles, MapPin } from 'lucide-react';
 
 interface AboutPageProps {
   darkMode: boolean;
@@ -98,24 +98,14 @@ const AboutPage: React.FC<AboutPageProps> = ({ darkMode }) => {
             Email Me
           </a>
           <div className="flex gap-4">
-            {/* TODO: replace with real profile URLs */}
             <a
-              href="https://github.com"
+              href="https://facebook.com"
               target="_blank"
               rel="noopener noreferrer"
-              aria-label="GitHub profile"
+              aria-label="Facebook page"
               className={`p-4 rounded-2xl border transition-all ${darkMode ? 'bg-slate-900 border-slate-800 text-slate-400 hover:text-white hover:border-slate-700' : 'bg-white border-slate-200 text-slate-600 hover:text-slate-900 hover:shadow-lg'}`}
             >
-              <Github size={24} />
-            </a>
-            <a
-              href="https://linkedin.com"
-              target="_blank"
-              rel="noopener noreferrer"
-              aria-label="LinkedIn profile"
-              className={`p-4 rounded-2xl border transition-all ${darkMode ? 'bg-slate-900 border-slate-800 text-slate-400 hover:text-white hover:border-slate-700' : 'bg-white border-slate-200 text-slate-600 hover:text-slate-900 hover:shadow-lg'}`}
-            >
-              <Linkedin size={24} />
+              <Facebook size={24} />
             </a>
           </div>
         </div>
