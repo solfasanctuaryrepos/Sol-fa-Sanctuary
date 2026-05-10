@@ -400,31 +400,34 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onPreview, darkMode, sh
         <h1 className={`text-3xl font-serif font-bold ${textPrimary}`}>Admin Dashboard</h1>
       </div>
 
-      <div className={`flex w-fit rounded-xl overflow-hidden border transition-colors p-1 ${darkMode ? 'bg-slate-900/50 border-slate-800' : 'bg-slate-200 border-slate-300'}`}>
-        <button 
-          onClick={() => { setActiveTab('users'); setViewMode('list'); }}
-          className={`px-4 md:px-6 py-2 rounded-lg text-xs md:text-sm font-medium transition-all flex items-center gap-2 ${activeTab === 'users' ? (darkMode ? 'bg-slate-800 text-slate-100 shadow-lg' : 'bg-white text-slate-900 shadow-sm') : (darkMode ? 'text-slate-500 hover:text-slate-300' : 'text-slate-600 hover:text-slate-800')}`}
-        >
-          <Users size={16} /> <span className="hidden sm:inline">User Management</span><span className="sm:hidden">Users</span>
-        </button>
-        <button
-          onClick={() => setActiveTab('content')}
-          className={`px-4 md:px-6 py-2 rounded-lg text-xs md:text-sm font-medium transition-all flex items-center gap-2 ${activeTab === 'content' ? (darkMode ? 'bg-slate-800 text-slate-100 shadow-lg' : 'bg-white text-slate-900 shadow-sm') : (darkMode ? 'text-slate-500 hover:text-slate-300' : 'text-slate-600 hover:text-slate-800')}`}
-        >
-          <Music size={16} /> <span className="hidden sm:inline">Content Moderation</span><span className="sm:hidden">Content</span>
-        </button>
-        <button
-          onClick={() => setActiveTab('requests')}
-          className={`px-4 md:px-6 py-2 rounded-lg text-xs md:text-sm font-medium transition-all flex items-center gap-2 ${activeTab === 'requests' ? (darkMode ? 'bg-slate-800 text-slate-100 shadow-lg' : 'bg-white text-slate-900 shadow-sm') : (darkMode ? 'text-slate-500 hover:text-slate-300' : 'text-slate-600 hover:text-slate-800')}`}
-        >
-          <BookOpen size={16} /> <span className="hidden sm:inline">Sheet Requests</span><span className="sm:hidden">Requests</span>
-        </button>
-        <button
-          onClick={() => setActiveTab('promos')}
-          className={`px-4 md:px-6 py-2 rounded-lg text-xs md:text-sm font-medium transition-all flex items-center gap-2 ${activeTab === 'promos' ? (darkMode ? 'bg-slate-800 text-slate-100 shadow-lg' : 'bg-white text-slate-900 shadow-sm') : (darkMode ? 'text-slate-500 hover:text-slate-300' : 'text-slate-600 hover:text-slate-800')}`}
-        >
-          <Tag size={16} /> <span className="hidden sm:inline">Promo Codes</span><span className="sm:hidden">Promos</span>
-        </button>
+      {/* Tab switcher: scroll horizontally on mobile if it overflows */}
+      <div className="-mx-4 px-4 sm:mx-0 sm:px-0 overflow-x-auto scrollbar-none">
+        <div className={`inline-flex rounded-xl border transition-colors p-1 ${darkMode ? 'bg-slate-900/50 border-slate-800' : 'bg-slate-200 border-slate-300'}`}>
+          <button
+            onClick={() => { setActiveTab('users'); setViewMode('list'); }}
+            className={`px-3 sm:px-4 md:px-6 py-2 rounded-lg text-xs md:text-sm font-medium transition-all flex items-center gap-2 whitespace-nowrap ${activeTab === 'users' ? (darkMode ? 'bg-slate-800 text-slate-100 shadow-lg' : 'bg-white text-slate-900 shadow-sm') : (darkMode ? 'text-slate-500 hover:text-slate-300' : 'text-slate-600 hover:text-slate-800')}`}
+          >
+            <Users size={16} /> <span className="hidden sm:inline">User Management</span><span className="sm:hidden">Users</span>
+          </button>
+          <button
+            onClick={() => setActiveTab('content')}
+            className={`px-3 sm:px-4 md:px-6 py-2 rounded-lg text-xs md:text-sm font-medium transition-all flex items-center gap-2 whitespace-nowrap ${activeTab === 'content' ? (darkMode ? 'bg-slate-800 text-slate-100 shadow-lg' : 'bg-white text-slate-900 shadow-sm') : (darkMode ? 'text-slate-500 hover:text-slate-300' : 'text-slate-600 hover:text-slate-800')}`}
+          >
+            <Music size={16} /> <span className="hidden sm:inline">Content Moderation</span><span className="sm:hidden">Content</span>
+          </button>
+          <button
+            onClick={() => setActiveTab('requests')}
+            className={`px-3 sm:px-4 md:px-6 py-2 rounded-lg text-xs md:text-sm font-medium transition-all flex items-center gap-2 whitespace-nowrap ${activeTab === 'requests' ? (darkMode ? 'bg-slate-800 text-slate-100 shadow-lg' : 'bg-white text-slate-900 shadow-sm') : (darkMode ? 'text-slate-500 hover:text-slate-300' : 'text-slate-600 hover:text-slate-800')}`}
+          >
+            <BookOpen size={16} /> <span className="hidden sm:inline">Sheet Requests</span><span className="sm:hidden">Requests</span>
+          </button>
+          <button
+            onClick={() => setActiveTab('promos')}
+            className={`px-3 sm:px-4 md:px-6 py-2 rounded-lg text-xs md:text-sm font-medium transition-all flex items-center gap-2 whitespace-nowrap ${activeTab === 'promos' ? (darkMode ? 'bg-slate-800 text-slate-100 shadow-lg' : 'bg-white text-slate-900 shadow-sm') : (darkMode ? 'text-slate-500 hover:text-slate-300' : 'text-slate-600 hover:text-slate-800')}`}
+          >
+            <Tag size={16} /> <span className="hidden sm:inline">Promo Codes</span><span className="sm:hidden">Promos</span>
+          </button>
+        </div>
       </div>
 
       {/* Content filter pills — shown only on content tab */}
