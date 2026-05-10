@@ -348,31 +348,35 @@ const Dashboard: React.FC<DashboardProps> = ({ onUploadClick, onPreview, darkMod
           <h1 className={`text-3xl font-serif font-bold ${textPrimary}`}>Dashboard</h1>
           <p className={textSecondary}>Here's an overview of your music sanctuary.</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           {onNavigateCollections && (
             <button
               onClick={onNavigateCollections}
-              className={`flex items-center justify-center gap-2 px-5 py-2.5 border font-semibold rounded-lg transition-all active:scale-95 ${darkMode ? 'border-slate-700 text-slate-300 hover:bg-slate-800' : 'border-slate-200 text-slate-700 hover:bg-slate-50'}`}
+              aria-label="Collections"
+              title="Collections"
+              className={`flex items-center justify-center gap-2 px-3 sm:px-5 py-2 sm:py-2.5 border font-semibold rounded-lg text-sm transition-all active:scale-95 ${darkMode ? 'border-slate-700 text-slate-300 hover:bg-slate-800' : 'border-slate-200 text-slate-700 hover:bg-slate-50'}`}
             >
               <BookOpen size={18} />
-              Collections
+              <span className="hidden sm:inline">Collections</span>
             </button>
           )}
           {onJoinTeam && (
             <button
               onClick={onJoinTeam}
-              className={`flex items-center justify-center gap-2 px-5 py-2.5 border font-semibold rounded-lg transition-all active:scale-95 ${darkMode ? 'border-purple-700/60 text-purple-400 hover:bg-purple-900/20' : 'border-purple-200 text-purple-600 hover:bg-purple-50'}`}
+              aria-label="Join a Team"
+              title="Join a Team"
+              className={`flex items-center justify-center gap-2 px-3 sm:px-5 py-2 sm:py-2.5 border font-semibold rounded-lg text-sm transition-all active:scale-95 ${darkMode ? 'border-purple-700/60 text-purple-400 hover:bg-purple-900/20' : 'border-purple-200 text-purple-600 hover:bg-purple-50'}`}
             >
               <Users size={18} />
-              Join a Team
+              <span className="hidden sm:inline">Join a Team</span>
             </button>
           )}
           <button
             onClick={onUploadClick}
-            className="flex items-center justify-center gap-2 px-6 py-2.5 bg-green-500 hover:bg-green-600 text-white font-semibold rounded-lg transition-all shadow-lg active:scale-95 shadow-green-500/10"
+            className="flex items-center justify-center gap-2 px-4 sm:px-6 py-2 sm:py-2.5 bg-green-500 hover:bg-green-600 text-white font-semibold rounded-lg text-sm transition-all shadow-lg active:scale-95 shadow-green-500/10"
           >
             <Upload size={18} />
-            Upload Music
+            <span>Upload Music</span>
           </button>
         </div>
       </div>
@@ -390,32 +394,34 @@ const Dashboard: React.FC<DashboardProps> = ({ onUploadClick, onPreview, darkMod
         ))}
       </div>
 
-      {/* Tab switcher: My Sheets / Favourites / Requests */}
-      <div className={`flex w-fit rounded-xl overflow-hidden border transition-colors p-1 ${darkMode ? 'bg-slate-900/50 border-slate-800' : 'bg-slate-200 border-slate-300'}`}>
-        <button
-          onClick={() => setActiveTab('mine')}
-          className={`px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-2 ${activeTab === 'mine' ? (darkMode ? 'bg-slate-800 text-slate-100 shadow-lg' : 'bg-white text-slate-900 shadow-sm') : (darkMode ? 'text-slate-500 hover:text-slate-300' : 'text-slate-600 hover:text-slate-800')}`}
-        >
-          <Music size={15} /> My Sheets
-        </button>
-        <button
-          onClick={() => setActiveTab('favourites')}
-          className={`px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-2 ${activeTab === 'favourites' ? (darkMode ? 'bg-slate-800 text-slate-100 shadow-lg' : 'bg-white text-slate-900 shadow-sm') : (darkMode ? 'text-slate-500 hover:text-slate-300' : 'text-slate-600 hover:text-slate-800')}`}
-        >
-          <Heart size={15} /> My Favourites <span className="text-[10px] font-bold ml-0.5">({favoriteSheets.length})</span>
-        </button>
-        <button
-          onClick={() => setActiveTab('requests')}
-          className={`px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-2 ${activeTab === 'requests' ? (darkMode ? 'bg-slate-800 text-slate-100 shadow-lg' : 'bg-white text-slate-900 shadow-sm') : (darkMode ? 'text-slate-500 hover:text-slate-300' : 'text-slate-600 hover:text-slate-800')}`}
-        >
-          <BookOpen size={15} /> My Requests
-        </button>
-        <button
-          onClick={() => setActiveTab('offline')}
-          className={`px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-2 ${activeTab === 'offline' ? (darkMode ? 'bg-slate-800 text-slate-100 shadow-lg' : 'bg-white text-slate-900 shadow-sm') : (darkMode ? 'text-slate-500 hover:text-slate-300' : 'text-slate-600 hover:text-slate-800')}`}
-        >
-          <WifiOff size={15} /> Offline <span className="text-[10px] font-bold ml-0.5">({offlineMeta.length})</span>
-        </button>
+      {/* Tab switcher: scroll horizontally on mobile if it overflows */}
+      <div className="-mx-4 px-4 sm:mx-0 sm:px-0 overflow-x-auto scrollbar-none">
+        <div className={`inline-flex rounded-xl border transition-colors p-1 ${darkMode ? 'bg-slate-900/50 border-slate-800' : 'bg-slate-200 border-slate-300'}`}>
+          <button
+            onClick={() => setActiveTab('mine')}
+            className={`px-3 sm:px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-2 whitespace-nowrap ${activeTab === 'mine' ? (darkMode ? 'bg-slate-800 text-slate-100 shadow-lg' : 'bg-white text-slate-900 shadow-sm') : (darkMode ? 'text-slate-500 hover:text-slate-300' : 'text-slate-600 hover:text-slate-800')}`}
+          >
+            <Music size={15} /> Sheets
+          </button>
+          <button
+            onClick={() => setActiveTab('favourites')}
+            className={`px-3 sm:px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-2 whitespace-nowrap ${activeTab === 'favourites' ? (darkMode ? 'bg-slate-800 text-slate-100 shadow-lg' : 'bg-white text-slate-900 shadow-sm') : (darkMode ? 'text-slate-500 hover:text-slate-300' : 'text-slate-600 hover:text-slate-800')}`}
+          >
+            <Heart size={15} /> Favourites <span className="text-[10px] font-bold">({favoriteSheets.length})</span>
+          </button>
+          <button
+            onClick={() => setActiveTab('requests')}
+            className={`px-3 sm:px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-2 whitespace-nowrap ${activeTab === 'requests' ? (darkMode ? 'bg-slate-800 text-slate-100 shadow-lg' : 'bg-white text-slate-900 shadow-sm') : (darkMode ? 'text-slate-500 hover:text-slate-300' : 'text-slate-600 hover:text-slate-800')}`}
+          >
+            <BookOpen size={15} /> Requests
+          </button>
+          <button
+            onClick={() => setActiveTab('offline')}
+            className={`px-3 sm:px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-2 whitespace-nowrap ${activeTab === 'offline' ? (darkMode ? 'bg-slate-800 text-slate-100 shadow-lg' : 'bg-white text-slate-900 shadow-sm') : (darkMode ? 'text-slate-500 hover:text-slate-300' : 'text-slate-600 hover:text-slate-800')}`}
+          >
+            <WifiOff size={15} /> Offline <span className="text-[10px] font-bold">({offlineMeta.length})</span>
+          </button>
+        </div>
       </div>
 
       {/* Favourites tab */}
