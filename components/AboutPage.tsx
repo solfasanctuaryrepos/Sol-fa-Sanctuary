@@ -99,7 +99,7 @@ const AboutPage: React.FC<AboutPageProps> = ({ darkMode }) => {
           </a>
           <div className="flex gap-4">
             <a
-              href="https://facebook.com"
+              href="https://www.facebook.com/1067595999777905"
               target="_blank"
               rel="noopener noreferrer"
               aria-label="Facebook page"
