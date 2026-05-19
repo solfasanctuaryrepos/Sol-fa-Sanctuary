@@ -119,12 +119,13 @@ const LandingPage: React.FC<LandingPageProps> = ({ onUploadClick, onBrowseClick,
         <div className="flex-1 relative w-full overflow-hidden">
           <div className={`absolute -inset-4 rounded-[40px] blur-3xl opacity-20 ${darkMode ? 'bg-green-500' : 'bg-green-300'}`}></div>
           <div className={`relative aspect-[16/10] rounded-[32px] overflow-hidden border shadow-2xl transition-colors duration-300 ${darkMode ? 'border-slate-800' : 'border-slate-200'}`}>
-            <img 
-              src="https://images.unsplash.com/photo-1514119412350-e174d90d280e?ixlib=rb-4.0.3&auto=format&fit=crop&w=1200&q=80" 
-              alt="Music Sanctuary" 
+            <img
+              src="/hero.jpg"
+              alt="Sol-fa Sanctuary — Tonic Solfa Music Community"
               className="w-full h-full object-cover"
+              loading="eager"
             />
-            <div className="absolute inset-0 bg-gradient-to-t from-slate-950/60 to-transparent"></div>
+            <div className="absolute inset-0 bg-gradient-to-t from-slate-950/40 to-transparent"></div>
           </div>
         </div>
       </section>
