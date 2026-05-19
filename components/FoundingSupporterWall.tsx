@@ -1,16 +1,28 @@
 /**
  * FoundingSupporterWall
  *
- * Lists the people who funded the year-one launch of Sol-fa Sanctuary.
- * Source: FOUNDING_SUPPORTERS in ../constants.ts — update that array as
- * supporters confirm.
+ * Fetches Founding Supporters from the founding_supporters table and renders
+ * a tiered wall. Renders nothing if the list is empty (pre-launch / no
+ * commitments yet).
  *
- * Tiers are styled distinctly. Patrons appear first and large.
+ * Admins manage the list via the AdminDashboard "Founding Supporters" panel.
  */
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Crown, Users, Sparkles, Heart } from 'lucide-react';
-import { FOUNDING_SUPPORTERS, FOUNDING_SUPPORTER_CAP, FoundingSupporter, FoundingSupporterTier } from '../constants';
+import { db } from '../supabase';
+import { FOUNDING_SUPPORTER_CAP } from '../constants';
+
+type FoundingSupporterTier = 'supporter' | 'revshare' | 'ensemble' | 'patron';
+
+interface FoundingSupporter {
+  id: string;
+  name: string;
+  tier: FoundingSupporterTier;
+  group_name: string | null;
+  message: string | null;
+  committed_at: string;
+}
 
 interface FoundingSupporterWallProps {
   darkMode: boolean;
@@ -40,6 +52,25 @@ const tierIcon = (tier: FoundingSupporterTier) => {
 };
 
 const FoundingSupporterWall: React.FC<FoundingSupporterWallProps> = ({ darkMode }) => {
+  const [supporters, setSupporters] = useState<FoundingSupporter[]>([]);
+  const [loaded, setLoaded]         = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    db.from('founding_supporters')
+      .select('*')
+      .order('committed_at', { ascending: true })
+      .then(({ data }) => {
+        if (cancelled) return;
+        setSupporters((data ?? []) as FoundingSupporter[]);
+        setLoaded(true);
+      });
+    return () => { cancelled = true; };
+  }, []);
+
+  // Hide entire section until first supporter is added
+  if (!loaded || supporters.length === 0) return null;
+
   const textPrimary   = darkMode ? 'text-slate-100' : 'text-slate-900';
   const textSecondary = darkMode ? 'text-slate-400' : 'text-slate-600';
   const cardBg        = darkMode ? 'bg-slate-900/50 border-slate-800' : 'bg-white border-slate-200 shadow-sm';
@@ -52,9 +83,8 @@ const FoundingSupporterWall: React.FC<FoundingSupporterWallProps> = ({ darkMode 
     }
   };
 
-  // Sort: patron → ensemble → revshare → supporter, preserve commitment order within tier
-  const sorted = [...FOUNDING_SUPPORTERS].sort((a, b) => TIER_ORDER[a.tier] - TIER_ORDER[b.tier]);
-  const filled = FOUNDING_SUPPORTERS.length;
+  const sorted = [...supporters].sort((a, b) => TIER_ORDER[a.tier] - TIER_ORDER[b.tier]);
+  const filled = supporters.length;
   const remaining = Math.max(0, FOUNDING_SUPPORTER_CAP - filled);
 
   return (
@@ -68,65 +98,30 @@ const FoundingSupporterWall: React.FC<FoundingSupporterWallProps> = ({ darkMode 
           The people who made this possible
         </h2>
         <p className={`mt-2 text-sm ${textSecondary}`}>
-          {filled === 0
-            ? `Be one of the first ${FOUNDING_SUPPORTER_CAP} people to back Sol-fa Sanctuary.`
-            : remaining > 0
-              ? `${filled} of ${FOUNDING_SUPPORTER_CAP} spots filled — ${remaining} remaining.`
-              : `All ${FOUNDING_SUPPORTER_CAP} Founding Supporter spots filled. Thank you.`}
+          {remaining > 0
+            ? `${filled} of ${FOUNDING_SUPPORTER_CAP} spots filled — ${remaining} remaining.`
+            : `All ${FOUNDING_SUPPORTER_CAP} Founding Supporter spots filled. Thank you.`}
         </p>
       </div>
 
-      {sorted.length === 0 ? (
-        <div className={`rounded-2xl border p-8 text-center ${cardBg}`}>
-          <p className={`text-sm ${textSecondary}`}>
-            Founding Supporters will be listed here as they join the round.
-          </p>
-          <a
-            href="mailto:vitalisnkwenti@gmail.com?subject=Founding%20Supporter%20-%20Sol-fa%20Sanctuary"
-            className={`inline-flex items-center gap-2 mt-4 px-5 py-2.5 rounded-xl font-bold text-sm transition-all active:scale-95 bg-green-500 hover:bg-green-600 text-white shadow-lg shadow-green-500/10`}
-          >
-            <Heart size={16} />
-            Become a Founding Supporter
-          </a>
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-          {sorted.map((s, i) => (
-            <SupporterCard key={`${s.name}-${i}`} supporter={s} darkMode={darkMode} tierBg={tierBg(s.tier)} icon={tierIcon(s.tier)} label={TIER_LABEL[s.tier]} />
-          ))}
-        </div>
-      )}
-    </section>
-  );
-};
-
-interface SupporterCardProps {
-  supporter: FoundingSupporter;
-  darkMode: boolean;
-  tierBg: string;
-  icon: React.ReactNode;
-  label: string;
-}
-
-const SupporterCard: React.FC<SupporterCardProps> = ({ supporter, darkMode, tierBg, icon, label }) => {
-  const textPrimary   = darkMode ? 'text-slate-100' : 'text-slate-900';
-  const textSecondary = darkMode ? 'text-slate-400' : 'text-slate-600';
-  const cardBg        = darkMode ? 'bg-slate-900/50 border-slate-800' : 'bg-white border-slate-200 shadow-sm';
-
-  return (
-    <div className={`rounded-2xl border p-4 transition-all hover:scale-[1.02] ${cardBg}`}>
-      <div className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-[10px] font-bold uppercase tracking-wider ${tierBg}`}>
-        {icon}
-        {label}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+        {sorted.map((s) => (
+          <div key={s.id} className={`rounded-2xl border p-4 transition-all hover:scale-[1.02] ${cardBg}`}>
+            <div className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-[10px] font-bold uppercase tracking-wider ${tierBg(s.tier)}`}>
+              {tierIcon(s.tier)}
+              {TIER_LABEL[s.tier]}
+            </div>
+            <p className={`mt-2 font-bold text-base break-words ${textPrimary}`}>{s.name}</p>
+            {s.group_name && (
+              <p className={`text-xs break-words ${textSecondary}`}>{s.group_name}</p>
+            )}
+            {s.message && (
+              <p className={`mt-2 text-xs italic break-words ${textSecondary}`}>"{s.message}"</p>
+            )}
+          </div>
+        ))}
       </div>
-      <p className={`mt-2 font-bold text-base break-words ${textPrimary}`}>{supporter.name}</p>
-      {supporter.group && (
-        <p className={`text-xs break-words ${textSecondary}`}>{supporter.group}</p>
-      )}
-      {supporter.message && (
-        <p className={`mt-2 text-xs italic break-words ${textSecondary}`}>"{supporter.message}"</p>
-      )}
-    </div>
+    </section>
   );
 };
 

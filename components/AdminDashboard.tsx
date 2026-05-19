@@ -1,5 +1,5 @@
 
-import { Search, Trash2, ChevronDown, Music, List, Grid, X, ArrowUp, ArrowDown, Lock, Unlock, Globe, Eye, Download, Check, Settings2, Calendar, Users, Shield, User as UserIcon, AlertTriangle, MoreVertical, ChevronLeft, ChevronRight, Heart, MessageSquare, BookOpen, ThumbsUp, CheckCircle2, Clock, XCircle, Tag, Plus, Copy, RefreshCw, Loader2, Crown } from 'lucide-react';
+import { Search, Trash2, ChevronDown, Music, List, Grid, X, ArrowUp, ArrowDown, Lock, Unlock, Globe, Eye, Download, Check, Settings2, Calendar, Users, Shield, User as UserIcon, AlertTriangle, MoreVertical, ChevronLeft, ChevronRight, Heart, MessageSquare, BookOpen, ThumbsUp, CheckCircle2, Clock, XCircle, Tag, Plus, Copy, RefreshCw, Loader2, Crown, Sparkles } from 'lucide-react';
 import React, { useState, useRef, useEffect, useCallback, memo } from 'react';
 import { AdminTab, MusicSheet, User, SheetRequest } from '../types';
 import { db } from '../supabase';
@@ -426,6 +426,12 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onPreview, darkMode, sh
             className={`px-3 sm:px-4 md:px-6 py-2 rounded-lg text-xs md:text-sm font-medium transition-all flex items-center gap-2 whitespace-nowrap ${activeTab === 'promos' ? (darkMode ? 'bg-slate-800 text-slate-100 shadow-lg' : 'bg-white text-slate-900 shadow-sm') : (darkMode ? 'text-slate-500 hover:text-slate-300' : 'text-slate-600 hover:text-slate-800')}`}
           >
             <Tag size={16} /> <span className="hidden sm:inline">Promo Codes</span><span className="sm:hidden">Promos</span>
+          </button>
+          <button
+            onClick={() => setActiveTab('supporters')}
+            className={`px-3 sm:px-4 md:px-6 py-2 rounded-lg text-xs md:text-sm font-medium transition-all flex items-center gap-2 whitespace-nowrap ${activeTab === 'supporters' ? (darkMode ? 'bg-slate-800 text-slate-100 shadow-lg' : 'bg-white text-slate-900 shadow-sm') : (darkMode ? 'text-slate-500 hover:text-slate-300' : 'text-slate-600 hover:text-slate-800')}`}
+          >
+            <Sparkles size={16} /> <span className="hidden sm:inline">Founding Supporters</span><span className="sm:hidden">Founders</span>
           </button>
         </div>
       </div>
@@ -1118,6 +1124,10 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onPreview, darkMode, sh
         </div>
       )}
 
+      {activeTab === 'supporters' && (
+        <FoundingSupportersAdminPanel darkMode={darkMode} textPrimary={textPrimary} textSecondary={textSecondary} cardBg={cardBg} />
+      )}
+
       {/* Custom Delete Confirmation Modal */}
       {deleteConfirmation && (
         <AdminDeleteConfirmModal
@@ -1201,5 +1211,154 @@ const AdminDeleteConfirmModal: React.FC<AdminDeleteConfirmModalProps> = ({ title
   );
 };
 // ─────────────────────────────────────────────────────────────────────────────
+
+// ── Founding Supporters admin panel ──────────────────────────────────────────
+interface FsAdminProps {
+  darkMode: boolean;
+  textPrimary: string;
+  textSecondary: string;
+  cardBg: string;
+}
+
+interface DbSupporter {
+  id: string;
+  name: string;
+  tier: 'supporter' | 'revshare' | 'ensemble' | 'patron';
+  group_name: string | null;
+  message: string | null;
+  contribution_amount: number | null;
+  committed_at: string;
+}
+
+const FoundingSupportersAdminPanel: React.FC<FsAdminProps> = ({ darkMode, textPrimary, textSecondary, cardBg }) => {
+  const [list, setList]            = useState<DbSupporter[]>([]);
+  const [loading, setLoading]      = useState(true);
+  const [submitting, setSubmitting]= useState(false);
+  const [err, setErr]              = useState<string | null>(null);
+
+  const [name, setName]            = useState('');
+  const [tier, setTier]            = useState<DbSupporter['tier']>('supporter');
+  const [groupName, setGroupName]  = useState('');
+  const [message, setMessage]      = useState('');
+  const [amount, setAmount]        = useState('');
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    const { data } = await db.from('founding_supporters')
+      .select('*')
+      .order('committed_at', { ascending: true });
+    setList((data ?? []) as DbSupporter[]);
+    setLoading(false);
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  const submit = async () => {
+    if (!name.trim()) { setErr('Name is required'); return; }
+    setSubmitting(true);
+    setErr(null);
+    const { error } = await db.rpc('add_founding_supporter', {
+      name_param:         name.trim(),
+      tier_param:         tier,
+      group_param:        groupName.trim() || null,
+      message_param:      message.trim() || null,
+      contribution_param: amount.trim() ? parseInt(amount, 10) : null,
+    });
+    if (error) {
+      setErr(error.message);
+    } else {
+      setName(''); setGroupName(''); setMessage(''); setAmount(''); setTier('supporter');
+      await load();
+    }
+    setSubmitting(false);
+  };
+
+  const remove = async (id: string) => {
+    if (!confirm('Remove this Founding Supporter?')) return;
+    const { error } = await db.rpc('remove_founding_supporter', { id_param: id });
+    if (error) { alert(error.message); return; }
+    await load();
+  };
+
+  const tierLabel = (t: DbSupporter['tier']) => ({
+    supporter: 'Supporter',
+    revshare:  'Investor (15k+)',
+    ensemble:  'Ensemble Patron (25k+)',
+    patron:    'Patron (50k+)',
+  })[t];
+
+  const inputCls = `w-full px-3 py-2 rounded-lg border text-sm outline-none transition-colors ${darkMode ? 'bg-slate-800 border-slate-700 text-slate-100 placeholder-slate-500 focus:border-amber-500' : 'bg-white border-slate-200 text-slate-900 placeholder-slate-400 focus:border-amber-500'}`;
+
+  return (
+    <div className="space-y-6">
+      <div className={`rounded-2xl border p-6 ${cardBg}`}>
+        <h2 className={`text-lg font-bold mb-4 flex items-center gap-2 ${textPrimary}`}>
+          <Sparkles size={18} className="text-amber-500" />
+          Add a Founding Supporter
+        </h2>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <input value={name}        onChange={e => setName(e.target.value)}      placeholder="Full name *"          className={inputCls} />
+          <select value={tier}        onChange={e => setTier(e.target.value as DbSupporter['tier'])} className={inputCls}>
+            <option value="supporter">Supporter (10,000 XAF)</option>
+            <option value="revshare">Investor (15,000 XAF)</option>
+            <option value="ensemble">Ensemble Patron (25,000 XAF)</option>
+            <option value="patron">Patron (50,000+ XAF)</option>
+          </select>
+          <input value={groupName}    onChange={e => setGroupName(e.target.value)} placeholder="Choir / group (optional)" className={inputCls} />
+          <input value={amount}       onChange={e => setAmount(e.target.value)}    placeholder="Amount in XAF (optional)" type="number" className={inputCls} />
+          <input value={message}      onChange={e => setMessage(e.target.value)}  placeholder="Short message (optional)" className={`${inputCls} md:col-span-2`} maxLength={200} />
+        </div>
+        {err && <p className="mt-3 text-sm text-red-400">{err}</p>}
+        <button
+          onClick={submit}
+          disabled={submitting || !name.trim()}
+          className="mt-4 px-5 py-2.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold rounded-xl text-sm flex items-center gap-2 disabled:opacity-60 transition-colors"
+        >
+          {submitting ? <Loader2 size={16} className="animate-spin" /> : <Plus size={16} />}
+          Add Supporter
+        </button>
+      </div>
+
+      <div className={`rounded-2xl border ${cardBg}`}>
+        <div className={`px-6 py-4 border-b ${darkMode ? 'border-slate-800' : 'border-slate-200'} flex items-center justify-between`}>
+          <h3 className={`font-bold ${textPrimary}`}>Current Founding Supporters</h3>
+          <span className={`text-xs font-semibold ${textSecondary}`}>{list.length} of 12 spots</span>
+        </div>
+        {loading ? (
+          <div className="p-8 flex justify-center"><Loader2 className="animate-spin text-amber-500" size={20} /></div>
+        ) : list.length === 0 ? (
+          <p className={`p-8 text-center text-sm ${textSecondary}`}>No supporters added yet.</p>
+        ) : (
+          <div className="divide-y divide-slate-200 dark:divide-slate-800">
+            {list.map(s => (
+              <div key={s.id} className="px-6 py-3 flex items-center justify-between gap-3">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-baseline gap-2 flex-wrap">
+                    <span className={`font-bold text-sm break-words ${textPrimary}`}>{s.name}</span>
+                    <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-500">
+                      {tierLabel(s.tier)}
+                    </span>
+                    {s.contribution_amount && (
+                      <span className={`text-xs ${textSecondary}`}>{s.contribution_amount.toLocaleString()} XAF</span>
+                    )}
+                  </div>
+                  {s.group_name && <p className={`text-xs ${textSecondary} break-words`}>{s.group_name}</p>}
+                  {s.message && <p className={`text-xs italic mt-0.5 ${textSecondary} break-words`}>"{s.message}"</p>}
+                </div>
+                <button
+                  onClick={() => remove(s.id)}
+                  title="Remove"
+                  className={`p-2 rounded-lg transition-colors shrink-0 ${darkMode ? 'text-slate-500 hover:text-red-400' : 'text-slate-400 hover:text-red-500'}`}
+                >
+                  <Trash2 size={15} />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
 
 export default AdminDashboard;

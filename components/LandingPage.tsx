@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { Upload, Search, Shield, Share2, ArrowRight, Eye, Download, LogIn, Music, Heart, MessageSquare, BookOpen, ThumbsUp, Star, WifiOff, Layers } from 'lucide-react';
 import { MusicSheet, SheetRequest } from '../types';
 import { db } from '../supabase';
+import FoundingSupporterCTA from './FoundingSupporterCTA';
 
 interface LandingPageProps {
   onUploadClick: () => void;
@@ -80,6 +81,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onUploadClick, onBrowseClick,
 
   return (
     <div className="space-y-24 animate-in fade-in duration-700">
+      <FoundingSupporterCTA darkMode={darkMode} />
       <section className="flex flex-col lg:flex-row items-center gap-12 pt-2 lg:pt-8">
         <div className="flex-1 space-y-4 lg:space-y-8">
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-green-500/10 border border-green-500/20 text-green-500 text-xs font-bold uppercase tracking-wider">
