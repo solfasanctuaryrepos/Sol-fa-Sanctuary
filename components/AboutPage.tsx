@@ -1,6 +1,7 @@
 
 import React from 'react';
 import { Mail, Facebook, Music, Code, Heart, Sparkles, MapPin } from 'lucide-react';
+import FoundingSupporterWall from './FoundingSupporterWall';
 
 interface AboutPageProps {
   darkMode: boolean;
@@ -81,6 +82,9 @@ const AboutPage: React.FC<AboutPageProps> = ({ darkMode }) => {
           </p>
         </div>
       </section>
+
+      {/* Founding Supporters Wall */}
+      <FoundingSupporterWall darkMode={darkMode} />
 
       {/* Connect Section */}
       <section className="space-y-12">
